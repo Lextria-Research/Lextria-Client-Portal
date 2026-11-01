@@ -1,0 +1,70 @@
+// src/App.tsx
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider, useAuth } from './lib/auth';
+import { ClientLayout } from './components/layout/ClientLayout';
+import { ClientLoginView } from './features/auth/ClientLoginView';
+import { ClientDashboardView } from './features/dashboard/ClientDashboardView';
+import { ClientMattersView } from './features/matters/ClientMattersView';
+import { ClientTimelineView } from './features/timeline/ClientTimelineView';
+import { ClientFinanceView } from './features/finance/ClientFinanceView';
+import { ClientDocumentVaultView } from './features/vault/ClientDocumentVaultView';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5,
+    },
+  },
+});
+
+const ProtectedClientRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { activeClient, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-xs font-mono">
+        Authenticating Lextria Client Portal...
+      </div>
+    );
+  }
+
+  if (!activeClient) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+export const App: React.FC = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<ClientLoginView />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedClientRoute>
+                  <ClientLayout />
+                </ProtectedClientRoute>
+              }
+            >
+              <Route index element={<ClientDashboardView />} />
+              <Route path="matters" element={<ClientMattersView />} />
+              <Route path="timeline" element={<ClientTimelineView />} />
+              <Route path="finance" element={<ClientFinanceView />} />
+              <Route path="vault" element={<ClientDocumentVaultView />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
+
+export default App;
