@@ -98,6 +98,7 @@ export async function fetchClientMatters(clientId: string): Promise<UnifiedMatte
       .from('project_codes')
       .select('*')
       .eq('client_id', clientId)
+      .limit(2500)
       .order('created_at', { ascending: false });
 
     if (error) {

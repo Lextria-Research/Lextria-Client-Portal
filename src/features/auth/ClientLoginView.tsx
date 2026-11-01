@@ -11,14 +11,13 @@ import {
   CheckCircle2,
   Sparkles,
 } from 'lucide-react';
-import { useAuth, PRESET_CLIENTS } from '../../lib/auth';
-import { ClientProfile } from '../../types/client';
+import { useAuth, SEEDED_CLIENT_LOGINS, ClientAccountDemo } from '../../lib/auth';
 
 export const ClientLoginView: React.FC = () => {
   const navigate = useNavigate();
-  const { signIn, selectPresetClient } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('mahe@client.lextria.in');
+  const [password, setPassword] = useState('LextriaPortal!MAHE2026');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,9 +39,19 @@ export const ClientLoginView: React.FC = () => {
     }
   };
 
-  const handlePresetSelect = (client: ClientProfile) => {
-    selectPresetClient(client);
-    navigate('/');
+  const handleSelectDemo = async (demo: ClientAccountDemo) => {
+    setEmail(demo.email);
+    setPassword(demo.defaultPassword || '');
+    setError(null);
+    setLoading(true);
+    try {
+      await signIn(demo.email, demo.defaultPassword || '');
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Login failed for selected client.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -63,7 +72,7 @@ export const ClientLoginView: React.FC = () => {
           Lextria Client Portal
         </h2>
         <p className="mt-2 text-center text-xs sm:text-sm text-slate-400">
-          Unified Legal Practice &amp; Intellectual Property Transparency
+          Secure, Isolated Access for Firm Clients &amp; Corporates
         </p>
       </div>
 
@@ -90,8 +99,8 @@ export const ClientLoginView: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. legal@clientcompany.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-blue-500 transition"
+                  placeholder="e.g. mahe@client.lextria.in"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-blue-500 transition font-mono"
                 />
               </div>
             </div>
@@ -124,56 +133,63 @@ export const ClientLoginView: React.FC = () => {
                 <span>Authenticating with Central Registry...</span>
               ) : (
                 <>
-                  <span>Sign In to Portal</span>
+                  <span>Sign In to Your Portfolio</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Quick 1-Click Client Profiles */}
+          {/* Quick Client Test Credentials (Fills & signs in through central Supabase Auth) */}
           <div className="mt-6 pt-6 border-t border-slate-800">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 text-center flex items-center justify-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              <span>1-Click Test &amp; Preview Portfolios</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+              <span>Dedicated Client Test Logins</span>
             </div>
             <div className="space-y-2">
-              {PRESET_CLIENTS.map((client) => (
-                <button
-                  key={client.id}
-                  type="button"
-                  onClick={() => handlePresetSelect(client)}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-800 hover:border-blue-500/50 bg-slate-800/40 hover:bg-blue-950/20 transition text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition">
-                      {client.client_code.substring(0, 3)}
-                    </div>
-                    <div className="truncate">
-                      <div className="text-xs font-bold text-slate-200 group-hover:text-blue-300 truncate transition">
-                        {client.client_name}
+              {SEEDED_CLIENT_LOGINS.map((demo) => {
+                const isSelected = email.toLowerCase() === demo.email.toLowerCase();
+                return (
+                  <button
+                    key={demo.client_id}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleSelectDemo(demo)}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition cursor-pointer group ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-950/30 text-white'
+                        : 'border-slate-800 hover:border-slate-700 bg-slate-800/40 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+                        {demo.client_code.substring(0, 3)}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        {client.client_code} • {client.entity_type}
+                      <div className="truncate">
+                        <div className="text-xs font-bold text-slate-200 group-hover:text-blue-300 truncate transition">
+                          {demo.client_name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {demo.email}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <span className="text-[11px] font-medium text-blue-400 opacity-80 group-hover:opacity-100 shrink-0">
-                    Explore →
-                  </span>
-                </button>
-              ))}
+                    <span className="text-[11px] font-medium text-blue-400 opacity-80 group-hover:opacity-100 shrink-0">
+                      Sign In →
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Client accounts and credentials are created and provisioned via{' '}
-          <span className="text-slate-400 font-medium">Lextria Task Manager Settings → Clients</span>.
+          Client accounts and credentials are provisioned centrally via{' '}
+          <span className="text-slate-400 font-medium">Task Manager Settings → Clients Directory</span>.
         </p>
       </div>
     </div>
   );
 };
 export default ClientLoginView;
-
