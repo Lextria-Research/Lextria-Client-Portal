@@ -323,3 +323,4 @@ export function getDepartmentColor(dept: string): { bg: string; text: string; bo
       };
   }
 }
+

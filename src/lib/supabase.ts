@@ -30,3 +30,4 @@ export const supabase = createClient(centralUrl, centralAnonKey, {
 export const coreDb = supabase.schema('core');
 export const financeDb = supabase.schema('finance');
 export default supabase;
+

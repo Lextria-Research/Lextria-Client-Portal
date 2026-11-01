@@ -44,3 +44,4 @@ export const MatterStatusBadge: React.FC<{ status: string }> = ({ status }) => {
     </span>
   );
 };
+

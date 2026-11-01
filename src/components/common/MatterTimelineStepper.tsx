@@ -68,3 +68,4 @@ export const MatterTimelineStepper: React.FC<StepperProps> = ({ department, stag
   );
 };
 export default MatterTimelineStepper;
+

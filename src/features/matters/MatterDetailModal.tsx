@@ -149,3 +149,4 @@ export const MatterDetailModal: React.FC<ModalProps> = ({ matter, onClose }) => 
   );
 };
 export default MatterDetailModal;
+
