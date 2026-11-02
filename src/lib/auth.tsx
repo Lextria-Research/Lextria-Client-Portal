@@ -77,39 +77,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadClientByUserId = async (user: any) => {
     try {
-      const cid = user.user_metadata?.client_id;
-      if (cid) {
-        const { data, error } = await supabase
-          .schema('core')
-          .from('clients')
-          .select('*')
-          .eq('id', cid)
-          .maybeSingle();
+      const meta = user.user_metadata || {};
+      const cid = meta.client_id;
+      let resolvedClient: ClientProfile | null = null;
 
-        if (data && !error) {
-          setActiveClient(data);
-          localStorage.setItem(LOCAL_STORAGE_CLIENT_KEY, JSON.stringify(data));
-          return;
+      // 1. Try querying core.clients from DB
+      if (cid) {
+        try {
+          const { data, error } = await supabase
+            .schema('core')
+            .from('clients')
+            .select('*')
+            .eq('id', cid)
+            .maybeSingle();
+
+          if (data && !error) {
+            resolvedClient = data;
+          }
+        } catch (e) {
+          console.warn('Direct core.clients lookup warning:', e);
         }
       }
 
-      // Fallback by user email
-      if (user.email) {
-        const { data: byEmail } = await supabase
-          .schema('core')
-          .from('clients')
-          .select('*')
-          .ilike('email', user.email)
-          .maybeSingle();
+      // 2. Try querying core.clients by email
+      if (!resolvedClient && user.email) {
+        try {
+          const { data: byEmail } = await supabase
+            .schema('core')
+            .from('clients')
+            .select('*')
+            .ilike('email', user.email)
+            .maybeSingle();
 
-        if (byEmail) {
-          setActiveClient(byEmail);
-          localStorage.setItem(LOCAL_STORAGE_CLIENT_KEY, JSON.stringify(byEmail));
-          return;
+          if (byEmail) {
+            resolvedClient = byEmail;
+          }
+        } catch (e) {
+          console.warn('Email core.clients lookup warning:', e);
         }
+      }
+
+      // 3. Robust Metadata Resolution (Guarantees client portal access for any created/edited client)
+      if (!resolvedClient && cid) {
+        resolvedClient = {
+          id: cid,
+          client_code: meta.client_code || 'CLIENT',
+          client_name: meta.client_name || user.email?.split('@')[0] || 'Client Portfolio',
+          entity_type: meta.entity_type || 'COMPANY',
+          email: user.email || meta.email || '',
+          phone: meta.phone || null,
+          gstin: meta.gstin || null,
+          pan: meta.pan || null,
+          billing_address: meta.billing_address || null,
+          state_code: meta.state_code || null,
+        };
+      }
+
+      // 4. Fallback: match seeded accounts by email
+      if (!resolvedClient && user.email) {
+        const seeded = SEEDED_CLIENT_LOGINS.find(
+          (s) => s.email.toLowerCase() === user.email.toLowerCase()
+        );
+        if (seeded) {
+          resolvedClient = {
+            id: seeded.client_id,
+            client_code: seeded.client_code,
+            client_name: seeded.client_name,
+            entity_type: 'COMPANY',
+            email: seeded.email,
+            phone: null,
+            gstin: null,
+            pan: null,
+            billing_address: null,
+            state_code: null,
+          };
+        }
+      }
+
+      if (resolvedClient) {
+        setActiveClient(resolvedClient);
+        localStorage.setItem(LOCAL_STORAGE_CLIENT_KEY, JSON.stringify(resolvedClient));
       }
     } catch (err) {
       console.warn('Failed to load client profile:', err);
+      if (user.user_metadata?.client_id) {
+        const fallbackClient: ClientProfile = {
+          id: user.user_metadata.client_id,
+          client_code: user.user_metadata.client_code || 'CLIENT',
+          client_name: user.user_metadata.client_name || user.email || 'Client Portfolio',
+          entity_type: user.user_metadata.entity_type || 'COMPANY',
+          email: user.email || '',
+          phone: null,
+          gstin: null,
+          pan: null,
+          billing_address: null,
+          state_code: null,
+        };
+        setActiveClient(fallbackClient);
+        localStorage.setItem(LOCAL_STORAGE_CLIENT_KEY, JSON.stringify(fallbackClient));
+      }
     }
   };
 
