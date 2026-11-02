@@ -7,48 +7,43 @@ import {
   AlertCircle,
   ArrowRight,
   ShieldCheck,
-  Building2,
-  CheckCircle2,
-  Sparkles,
+  Eye,
+  EyeOff,
+  Loader2,
 } from 'lucide-react';
-import { useAuth, SEEDED_CLIENT_LOGINS, ClientAccountDemo } from '../../lib/auth';
+import { useAuth } from '../../lib/auth';
 
 export const ClientLoginView: React.FC = () => {
   const navigate = useNavigate();
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('mahe@client.lextria.in');
-  const [password, setPassword] = useState('LextriaPortal!MAHE2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) {
-      setError('Please enter your client account email.');
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail) {
+      setError('Please enter your registered client account email.');
       return;
     }
+
+    if (!cleanPassword) {
+      setError('Please enter your portal password.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      await signIn(email.trim(), password.trim());
+      await signIn(cleanEmail, cleanPassword);
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Invalid credentials or client account not found.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelectDemo = async (demo: ClientAccountDemo) => {
-    setEmail(demo.email);
-    setPassword(demo.defaultPassword || '');
-    setError(null);
-    setLoading(true);
-    try {
-      await signIn(demo.email, demo.defaultPassword || '');
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Login failed for selected client.');
     } finally {
       setLoading(false);
     }
@@ -99,8 +94,9 @@ export const ClientLoginView: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. mahe@client.lextria.in"
+                  placeholder="e.g. legal@clientcompany.com"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-blue-500 transition font-mono"
+                  autoFocus
                 />
               </div>
             </div>
@@ -114,13 +110,21 @@ export const ClientLoginView: React.FC = () => {
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-blue-500 transition font-mono"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-blue-500 transition font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -130,7 +134,10 @@ export const ClientLoginView: React.FC = () => {
               className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl shadow-lg shadow-blue-600/20 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
-                <span>Authenticating with Central Registry...</span>
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Authenticating with Central Registry...</span>
+                </>
               ) : (
                 <>
                   <span>Sign In to Your Portfolio</span>
@@ -140,46 +147,10 @@ export const ClientLoginView: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Client Test Credentials (Fills & signs in through central Supabase Auth) */}
-          <div className="mt-6 pt-6 border-t border-slate-800">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3 text-center flex items-center justify-center gap-1.5">
+          <div className="mt-6 pt-5 border-t border-slate-800 text-center">
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span>Dedicated Client Test Logins</span>
-            </div>
-            <div className="space-y-2">
-              {SEEDED_CLIENT_LOGINS.map((demo) => {
-                const isSelected = email.toLowerCase() === demo.email.toLowerCase();
-                return (
-                  <button
-                    key={demo.client_id}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleSelectDemo(demo)}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition cursor-pointer group ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-950/30 text-white'
-                        : 'border-slate-800 hover:border-slate-700 bg-slate-800/40 text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                      <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
-                        {demo.client_code.substring(0, 3)}
-                      </div>
-                      <div className="truncate">
-                        <div className="text-xs font-bold text-slate-200 group-hover:text-blue-300 truncate transition">
-                          {demo.client_name}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {demo.email}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-medium text-blue-400 opacity-80 group-hover:opacity-100 shrink-0">
-                      Sign In →
-                    </span>
-                  </button>
-                );
-              })}
+              <span>Privileged Client Portfolio Encryption</span>
             </div>
           </div>
         </div>
