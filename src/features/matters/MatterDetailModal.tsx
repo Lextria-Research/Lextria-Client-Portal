@@ -74,6 +74,48 @@ export const MatterDetailModal: React.FC<ModalProps> = ({ matter, onClose }) => 
             </div>
           </div>
 
+          {/* Court & Litigation Details if applicable */}
+          {matter.court && (
+            <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  <Scale className="w-4 h-4" />
+                  <span>Litigation &amp; Court Details</span>
+                </div>
+                {matter.client_role && (
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                    Role: {matter.client_role}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400">Court / Forum:</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{matter.court}</p>
+                  {matter.bench && <p className="text-[11px] text-slate-500">Bench: {matter.bench}</p>}
+                </div>
+                <div>
+                  <span className="text-slate-400">Case &amp; CNR Number:</span>
+                  <p className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5">{matter.case_number || 'Pending'}</p>
+                  {matter.cnr_number && <p className="font-mono text-[11px] text-slate-500">CNR: {matter.cnr_number}</p>}
+                </div>
+                {matter.next_hearing_date && (
+                  <div className="sm:col-span-2 pt-2 border-t border-amber-500/10 flex flex-wrap items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-semibold">
+                      <Calendar className="w-4 h-4" />
+                      <span>Next Hearing: {formatDate(matter.next_hearing_date)}</span>
+                    </span>
+                    {matter.next_purpose && (
+                      <span className="text-slate-600 dark:text-slate-400">
+                        Purpose: <strong className="text-slate-800 dark:text-slate-200">{matter.next_purpose}</strong>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Lifecycle Stepper */}
           <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">

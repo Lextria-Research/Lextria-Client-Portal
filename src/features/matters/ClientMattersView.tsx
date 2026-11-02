@@ -7,6 +7,7 @@ import {
   Award,
   Layers,
   Scale,
+  Calendar,
   FileCheck,
   ChevronRight,
   RefreshCw,
@@ -205,6 +206,22 @@ export const ClientMattersView: React.FC = () => {
                       </>
                     )}
                   </div>
+                  {matter.court && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                      <span className="font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-800/60 flex items-center gap-1.5">
+                        <Scale className="w-3.5 h-3.5" />
+                        <span>{matter.court}</span>
+                        {matter.case_number && <span className="font-mono">({matter.case_number})</span>}
+                      </span>
+                      {matter.next_hearing_date && (
+                        <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300 font-sans font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                          <span>Next Hearing: <strong className="text-slate-900 dark:text-slate-100">{formatDate(matter.next_hearing_date)}</strong></span>
+                          {matter.next_purpose && <span className="text-slate-400">({matter.next_purpose})</span>}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: Stage Stepper preview & details arrow */}

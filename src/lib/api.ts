@@ -42,9 +42,30 @@ export const PROSECUTION_STAGES: Record<string, string[]> = {
   ],
 };
 
-export function calculateStageProgress(department: string, events: MatterEvent[] = []) {
-  const stageList = PROSECUTION_STAGES[department] || PROSECUTION_STAGES['IP_PATENT'];
+export function calculateStageProgress(
+  department: string,
+  events: MatterEvent[] = [],
+  litCase?: any
+) {
+  const stageList = PROSECUTION_STAGES[department] || PROSECUTION_STAGES['LITIGATION'];
   const totalStages = stageList.length;
+
+  if (department === 'LITIGATION' && litCase?.current_stage) {
+    const cs = litCase.current_stage.toLowerCase();
+    let stageIdx = 0;
+    if (cs.includes('decree') || cs.includes('order') || cs.includes('disposed') || cs.includes('judgment')) stageIdx = 4;
+    else if (cs.includes('argument') || cs.includes('evidence') || cs.includes('hearing') || cs.includes('trial')) stageIdx = 3;
+    else if (cs.includes('pleading') || cs.includes('objection') || cs.includes('reply') || cs.includes('rejoinder') || cs.includes('ws')) stageIdx = 2;
+    else if (cs.includes('summons') || cs.includes('notice') || cs.includes('admission')) stageIdx = 1;
+    else stageIdx = 0;
+
+    return {
+      currentStage: litCase.current_stage,
+      stageIndex: stageIdx,
+      totalStages,
+      percentage: Math.round(((stageIdx + 1) / totalStages) * 100),
+    };
+  }
 
   if (!events || events.length === 0) {
     return {
@@ -55,7 +76,6 @@ export function calculateStageProgress(department: string, events: MatterEvent[]
     };
   }
 
-  // Derive highest stage from achieved events
   const eventCodes = events.map((e) => (e.event_code || '').toUpperCase());
 
   let stageIndex = 0;
@@ -89,10 +109,90 @@ export function calculateStageProgress(department: string, events: MatterEvent[]
   };
 }
 
+export interface PortalDataBundle {
+  client?: any;
+  matters: UnifiedMatter[];
+  events: MatterEvent[];
+  billingStages: BillingStageItem[];
+  recoverableCosts: RecoverableCostItem[];
+  documents: ClientDocumentItem[];
+}
+
+let cachedBundle: { clientId: string; timestamp: number; data: PortalDataBundle } | null = null;
+let activeFetchPromise: Promise<PortalDataBundle> | null = null;
+
+export function clearPortalCache() {
+  cachedBundle = null;
+  activeFetchPromise = null;
+}
+
+export async function fetchPortalData(clientId: string, force = false): Promise<PortalDataBundle> {
+  const now = Date.now();
+  if (!force && cachedBundle && cachedBundle.clientId === clientId && (now - cachedBundle.timestamp < 20000)) {
+    return cachedBundle.data;
+  }
+
+  if (activeFetchPromise) {
+    return activeFetchPromise;
+  }
+
+  activeFetchPromise = (async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {
+        'x-client-id': clientId,
+      };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch(`/api/portal-data?clientId=${encodeURIComponent(clientId)}`, {
+        headers,
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          const bundle: PortalDataBundle = {
+            client: json.client || null,
+            matters: json.matters || [],
+            events: json.events || [],
+            billingStages: json.billingStages || [],
+            recoverableCosts: json.recoverableCosts || [],
+            documents: json.documents || [],
+          };
+          cachedBundle = { clientId, timestamp: Date.now(), data: bundle };
+          return bundle;
+        }
+      } else {
+        console.warn('API /api/portal-data returned HTTP', res.status);
+      }
+    } catch (err) {
+      console.warn('API /api/portal-data call error:', err);
+    } finally {
+      activeFetchPromise = null;
+    }
+
+    // Fallback: direct Supabase querying
+    const fallbackMatters = await fetchDirectClientMatters(clientId);
+    const bundle: PortalDataBundle = {
+      matters: fallbackMatters,
+      events: [],
+      billingStages: [],
+      recoverableCosts: [],
+      documents: [],
+    };
+    cachedBundle = { clientId, timestamp: Date.now(), data: bundle };
+    return bundle;
+  })();
+
+  return activeFetchPromise;
+}
+
 /**
- * Fetch all matters belonging to client across all 4 departments
+ * Direct fallback for fetchClientMatters in case serverless is unreachable
  */
-export async function fetchClientMatters(clientId: string): Promise<UnifiedMatter[]> {
+async function fetchDirectClientMatters(clientId: string): Promise<UnifiedMatter[]> {
   try {
     const { data, error } = await coreDb
       .from('project_codes')
@@ -102,14 +202,13 @@ export async function fetchClientMatters(clientId: string): Promise<UnifiedMatte
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.warn('Error fetching client matters:', error.message);
+      console.warn('Direct fallback matters error:', error.message);
       return [];
     }
 
     const matters: UnifiedMatter[] = data || [];
     if (matters.length === 0) return [];
 
-    // Fetch associated events in batch
     const matterIds = matters.map((m) => m.id);
     const { data: eventsData } = await coreDb
       .from('matter_events')
@@ -136,9 +235,24 @@ export async function fetchClientMatters(clientId: string): Promise<UnifiedMatte
       };
     });
   } catch (err) {
-    console.error('fetchClientMatters exception:', err);
+    console.error('fetchDirectClientMatters error:', err);
     return [];
   }
+}
+
+/**
+ * Fetch all matters belonging to client across all 4 departments (with Litigator case enrichment)
+ */
+export async function fetchClientMatters(clientId: string, force = false): Promise<UnifiedMatter[]> {
+  try {
+    const bundle = await fetchPortalData(clientId, force);
+    if (bundle && Array.isArray(bundle.matters)) {
+      return bundle.matters;
+    }
+  } catch (err) {
+    console.warn('fetchClientMatters bundle lookup failed:', err);
+  }
+  return fetchDirectClientMatters(clientId);
 }
 
 /**
@@ -148,6 +262,19 @@ export async function fetchClientEvents(
   clientId: string,
   projectCodeId?: string
 ): Promise<MatterEvent[]> {
+  try {
+    const bundle = await fetchPortalData(clientId);
+    if (bundle && Array.isArray(bundle.events)) {
+      if (projectCodeId) {
+        return bundle.events.filter((e) => e.project_code_id === projectCodeId);
+      }
+      return bundle.events;
+    }
+  } catch (err) {
+    console.warn('fetchClientEvents bundle lookup failed:', err);
+  }
+
+  // Fallback to direct coreDb
   try {
     let query = coreDb
       .from('matter_events')
@@ -161,14 +288,10 @@ export async function fetchClientEvents(
       query = query.eq('project_codes.client_id', clientId);
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.warn('fetchClientEvents error:', error.message);
-      return [];
-    }
+    const { data } = await query;
     return data || [];
   } catch (err) {
-    console.error('fetchClientEvents exception:', err);
+    console.error('Direct fetchClientEvents error:', err);
     return [];
   }
 }
@@ -176,22 +299,28 @@ export async function fetchClientEvents(
 /**
  * Fetch billing stages (work-in-progress / completed milestone billing)
  */
-export async function fetchClientBillingStages(matterIds: string[]): Promise<BillingStageItem[]> {
+export async function fetchClientBillingStages(
+  matterIds: string[],
+  clientId?: string
+): Promise<BillingStageItem[]> {
   if (!matterIds.length) return [];
+  if (cachedBundle?.data?.billingStages?.length) {
+    return cachedBundle.data.billingStages.filter((b) => matterIds.includes(b.project_code_id));
+  }
+  if (clientId) {
+    try {
+      const bundle = await fetchPortalData(clientId);
+      return (bundle.billingStages || []).filter((b) => matterIds.includes(b.project_code_id));
+    } catch (e) {}
+  }
   try {
-    const { data, error } = await financeDb
+    const { data } = await financeDb
       .from('billing_stages')
       .select('*')
       .in('project_code_id', matterIds)
       .order('created_at', { ascending: false });
-
-    if (error) {
-      console.warn('fetchClientBillingStages warning:', error.message);
-      return [];
-    }
     return data || [];
   } catch (err) {
-    console.error('fetchClientBillingStages exception:', err);
     return [];
   }
 }
@@ -200,23 +329,27 @@ export async function fetchClientBillingStages(matterIds: string[]): Promise<Bil
  * Fetch official recoverable government fees and out-of-pocket costs
  */
 export async function fetchClientRecoverableCosts(
-  matterIds: string[]
+  matterIds: string[],
+  clientId?: string
 ): Promise<RecoverableCostItem[]> {
   if (!matterIds.length) return [];
+  if (cachedBundle?.data?.recoverableCosts?.length) {
+    return cachedBundle.data.recoverableCosts.filter((c) => matterIds.includes(c.project_code_id));
+  }
+  if (clientId) {
+    try {
+      const bundle = await fetchPortalData(clientId);
+      return (bundle.recoverableCosts || []).filter((c) => matterIds.includes(c.project_code_id));
+    } catch (e) {}
+  }
   try {
-    const { data, error } = await coreDb
+    const { data } = await coreDb
       .from('recoverable_costs')
       .select('*')
       .in('project_code_id', matterIds)
       .order('cost_date', { ascending: false });
-
-    if (error) {
-      console.warn('fetchClientRecoverableCosts warning:', error.message);
-      return [];
-    }
     return data || [];
   } catch (err) {
-    console.error('fetchClientRecoverableCosts exception:', err);
     return [];
   }
 }
@@ -224,7 +357,22 @@ export async function fetchClientRecoverableCosts(
 /**
  * Fetch client-shared legal documents & filings
  */
-export async function fetchClientDocuments(matterIds: string[]): Promise<ClientDocumentItem[]> {
+export async function fetchClientDocuments(
+  matterIds: string[],
+  clientId?: string
+): Promise<ClientDocumentItem[]> {
+  if (cachedBundle?.data?.documents?.length) {
+    if (matterIds.length === 0) return cachedBundle.data.documents;
+    return cachedBundle.data.documents.filter(
+      (d) => !d.project_code_id || matterIds.includes(d.project_code_id)
+    );
+  }
+  if (clientId) {
+    try {
+      const bundle = await fetchPortalData(clientId);
+      return bundle.documents || [];
+    } catch (e) {}
+  }
   try {
     let query = coreDb
       .from('documents')
@@ -236,14 +384,9 @@ export async function fetchClientDocuments(matterIds: string[]): Promise<ClientD
       query = query.or(`project_code_id.in.(${matterIds.join(',')}),project_code_id.is.null`);
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.warn('fetchClientDocuments warning:', error.message);
-      return [];
-    }
+    const { data } = await query;
     return data || [];
   } catch (err) {
-    console.error('fetchClientDocuments exception:', err);
     return [];
   }
 }
@@ -324,4 +467,3 @@ export function getDepartmentColor(dept: string): { bg: string; text: string; bo
       };
   }
 }
-

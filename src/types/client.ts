@@ -42,6 +42,14 @@ export interface UnifiedMatter {
     totalStages: number;
     percentage: number;
   };
+  court?: string | null;
+  bench?: string | null;
+  case_number?: string | null;
+  cnr_number?: string | null;
+  client_role?: string | null;
+  next_hearing_date?: string | null;
+  next_purpose?: string | null;
+  current_stage?: string | null;
 }
 
 export interface MatterEvent {
