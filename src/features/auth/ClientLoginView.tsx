@@ -157,11 +157,6 @@ export const ClientLoginView: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <p className="mt-6 text-center text-xs text-slate-500">
-          Client accounts and credentials are provisioned centrally via{' '}
-          <span className="text-slate-400 font-medium">Task Manager Settings → Clients Directory</span>.
-        </p>
       </div>
     </div>
   );
