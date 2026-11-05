@@ -183,13 +183,11 @@ export const ClientDashboardView: React.FC = () => {
 
       <div id="entity-panel" role="tabpanel" className="space-y-8">
         {/* KPI cards for the active entity */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KpiCard label="Matters" value={loading ? '—' : String(tabMatters.length)} hint={activeTab?.label ?? ''} icon={<Briefcase className="w-4 h-4 text-blue-600 dark:text-blue-400" />} />
           {departmentCounts.map(([dept, n]) => (
             <KpiCard key={dept} label={getDepartmentLabel(dept)} value={loading ? '—' : String(n)} hint="Active in this practice" icon={<FileCheck className="w-4 h-4 text-slate-500" />} />
           ))}
-          <KpiCard label="Fees billed" value={loading ? '—' : formatINR(feesBilled)} hint="Triggered milestone fees" icon={<Receipt className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />} />
-          <KpiCard label="Costs incurred" value={loading ? '—' : formatINR(costsIncurred)} hint="Govt fees & disbursements" icon={<Receipt className="w-4 h-4 text-purple-600 dark:text-purple-400" />} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -277,7 +275,7 @@ export const ClientDashboardView: React.FC = () => {
 
             {activeTab?.entity && (
               <div className="p-5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-800 dark:text-blue-300">
-                <h3 className="font-bold uppercase tracking-wider text-blue-900 dark:text-blue-300">Billed by</h3>
+                <h3 className="font-bold uppercase tracking-wider text-blue-900 dark:text-blue-300">Practice Entity</h3>
                 <p className="mt-1 font-semibold">{activeTab.entity.display_name}</p>
                 {activeTab.entity.gstin && <p className="font-mono mt-0.5">GSTIN {activeTab.entity.gstin}</p>}
               </div>

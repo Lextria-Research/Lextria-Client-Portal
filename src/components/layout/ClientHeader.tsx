@@ -37,8 +37,9 @@ export const ClientHeader: React.FC = () => {
     { label: 'Overview', to: '/', icon: LayoutDashboard },
     { label: 'Matters & Cases', to: '/matters', icon: Briefcase },
     { label: 'Milestones & Filings', to: '/timeline', icon: History },
-    { label: 'Billing & Retainers', to: '/finance', icon: CreditCard },
-    { label: 'Document Vault', to: '/vault', icon: FolderLock },
+    // Hidden from client view for now; kept ready for future release:
+    // { label: 'Billing & Retainers', to: '/finance', icon: CreditCard },
+    // { label: 'Document Vault', to: '/vault', icon: FolderLock },
   ];
 
   const handleLogout = async () => {

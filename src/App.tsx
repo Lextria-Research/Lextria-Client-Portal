@@ -56,8 +56,9 @@ export const App: React.FC = () => {
               <Route index element={<ClientDashboardView />} />
               <Route path="matters" element={<ClientMattersView />} />
               <Route path="timeline" element={<ClientTimelineView />} />
-              <Route path="finance" element={<ClientFinanceView />} />
-              <Route path="vault" element={<ClientDocumentVaultView />} />
+              {/* Fees/Billing and Document Vault temporarily disabled for clients; redirected to overview */}
+              <Route path="finance" element={<Navigate to="/" replace />} />
+              <Route path="vault" element={<Navigate to="/" replace />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
