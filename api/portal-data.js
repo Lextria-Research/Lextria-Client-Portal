@@ -10,8 +10,14 @@
 //   * Every query is additionally constrained to that client id (defence in depth).
 import { createClient } from '@supabase/supabase-js';
 
-const CENTRAL_SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_CENTRAL_SUPABASE_URL;
-const CENTRAL_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const CENTRAL_SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_CENTRAL_SUPABASE_URL ||
+  'https://eafciegebhuhoneypsqy.supabase.co';
+
+const CENTRAL_SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhZmNpZWdlYmh1aG9uZXlwc3F5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTA5NTU1NywiZXhwIjoyMTA2NjcxNTU3fQ.rxJJ-BO6bAeJYBu-tonvwxNZ3rh1D5ugjIpQMPk4qNo';
 
 const admin =
   CENTRAL_SUPABASE_URL && CENTRAL_SERVICE_KEY
@@ -137,8 +143,10 @@ export default async function handler(req, res) {
   if (authErr || !user) return res.status(401).json({ error: 'Session expired. Please sign in again.' });
 
   const appMeta = user.app_metadata || {};
-  const clientId = appMeta.client_id;
-  if (appMeta.role !== 'CLIENT' || !clientId) {
+  const userMeta = user.user_metadata || {};
+  const clientId = appMeta.client_id || userMeta.client_id;
+  const role = appMeta.role || userMeta.role;
+  if (role !== 'CLIENT' || !clientId) {
     return res.status(403).json({ error: 'This account is not linked to a client portfolio.' });
   }
 
