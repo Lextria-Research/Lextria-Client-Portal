@@ -64,6 +64,11 @@ export interface UnifiedMatter {
   next_hearing_date?: string | null;
   next_purpose?: string | null;
   current_stage?: string | null;
+  // Patent details
+  application_number?: string | null;
+  patent_number?: string | null;
+  specification_type?: string | null;
+  patent_status?: string | null;
 }
 
 export interface MatterEvent {

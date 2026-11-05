@@ -116,6 +116,44 @@ export const MatterDetailModal: React.FC<ModalProps> = ({ matter, onClose }) => 
             </div>
           )}
 
+          {/* Patent Details if applicable */}
+          {matter.department === 'IP_PATENT' && (
+            <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  <Award className="w-4 h-4" />
+                  <span>Patent Prosecution &amp; Filing Details</span>
+                </div>
+                {matter.specification_type && (
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                    Spec: {matter.specification_type}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400">Application Number:</span>
+                  <p className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {matter.application_number || 'Awaiting Filing Receipt'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-400">Current Docket Status:</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {matter.patent_status || matter.status || 'Active Docket'}
+                  </p>
+                </div>
+                {matter.patent_number && (
+                  <div className="sm:col-span-2 pt-2 border-t border-blue-500/10 flex items-center gap-2">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                      Patent Granted: No. {matter.patent_number}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Lifecycle Stepper */}
           <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">

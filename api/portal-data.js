@@ -226,10 +226,41 @@ export default async function handler(req, res) {
       .order('created_at', { ascending: false });
     if (pcErr) throw pcErr;
 
-    const matters = (projectCodes || []).map((m) => ({
+    // Soft query patent applications for this client to ensure zero sync lag
+    const { data: clientPatentApps } = await admin
+      .schema('patent')
+      .from('applications')
+      .select('id, project_code_id, project_code, application_number, patent_number, specification_type, current_status, applicant_name, title, created_at')
+      .eq('client_id', clientId);
+
+    const baseMatters = (projectCodes || []).map((m) => ({
       ...m,
       billing_entity: m.billing_entity || (m.department === 'LITIGATION' ? 'PBA' : 'LEXTRIA_RESEARCH')
     }));
+
+    // Auto-reconcile any patent application linked to client_id that is pending in core.project_codes
+    const existingCodes = new Set(baseMatters.map((m) => m.code));
+    if (Array.isArray(clientPatentApps)) {
+      for (const p of clientPatentApps) {
+        if (p.project_code && !existingCodes.has(p.project_code)) {
+          baseMatters.push({
+            id: p.project_code_id || p.id,
+            code: p.project_code,
+            prefix: null,
+            department: 'IP_PATENT',
+            client_id: clientId,
+            title: p.title || `Patent Application ${p.project_code}`,
+            status: p.current_status || 'ACTIVE',
+            owning_app: 'IP_LEDGER',
+            created_at: p.created_at,
+            billing_entity: 'LEXTRIA_RESEARCH',
+          });
+          existingCodes.add(p.project_code);
+        }
+      }
+    }
+
+    const matters = baseMatters;
     const matterIds = matters.map((m) => m.id);
     const empty = Promise.resolve({ data: [], error: null });
 
@@ -307,6 +338,8 @@ export default async function handler(req, res) {
     ]);
 
     const litByMatter = new Map(litCases.map((lc) => [lc.project_code_id, lc]));
+    const patentByPcId = new Map((clientPatentApps || []).map((p) => [p.project_code_id, p]));
+    const patentByCode = new Map((clientPatentApps || []).map((p) => [p.project_code, p]));
     const eventsByMatter = new Map();
     for (const ev of events) {
       if (!eventsByMatter.has(ev.project_code_id)) eventsByMatter.set(ev.project_code_id, []);
@@ -317,6 +350,7 @@ export default async function handler(req, res) {
     const enrichedMatters = matters.map((m) => {
       const matterEvents = eventsByMatter.get(m.id) || [];
       const lc = litByMatter.get(m.id) || null;
+      const pat = patentByPcId.get(m.id) || patentByCode.get(m.code);
       return {
         ...m,
         court: lc?.court ?? null,
@@ -327,6 +361,10 @@ export default async function handler(req, res) {
         next_hearing_date: lc?.next_hearing_date ?? null,
         next_purpose: lc?.next_purpose ?? null,
         current_stage: lc?.current_stage ?? null,
+        application_number: pat?.application_number ?? null,
+        patent_number: pat?.patent_number ?? null,
+        specification_type: pat?.specification_type ?? null,
+        patent_status: pat?.current_status ?? null,
         last_event: matterEvents[0] || null,
         events_count: matterEvents.length,
         stage_progress: calculateStageProgress(m.department, matterEvents, lc),
