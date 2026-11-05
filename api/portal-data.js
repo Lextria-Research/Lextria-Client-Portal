@@ -32,6 +32,33 @@ const ALLOWED_ORIGINS = (process.env.PORTAL_ALLOWED_ORIGINS || '')
 // Cost rows a client should see on their statement.
 const CLIENT_VISIBLE_COST_STATUSES = ['PENDING_FINANCE', 'AUTO_POSTED'];
 
+const DEFAULT_LEGAL_ENTITIES = [
+  {
+    code: 'LEXTRIA_RESEARCH',
+    display_name: 'Lextria Research',
+    practice_areas: 'Patents, Trademarks, Copyrights, Designs, Commercial Agreements',
+    sort_order: 1,
+    gstin: null,
+    bank_account_name: 'Lextria Research',
+    bank_name: 'HDFC Bank',
+    bank_account_no: null,
+    bank_ifsc: null,
+    bank_branch: null,
+  },
+  {
+    code: 'PBA',
+    display_name: 'Pranav Bhat & Associates',
+    practice_areas: 'Litigation, Court Disputes, High Court, NCLT, Commercial Suits',
+    sort_order: 2,
+    gstin: null,
+    bank_account_name: 'Pranav Bhat & Associates',
+    bank_name: 'State Bank of India',
+    bank_account_no: null,
+    bank_ifsc: null,
+    bank_branch: null,
+  },
+];
+
 const PROSECUTION_STAGES = {
   IP_PATENT: [
     'Provisional Filed',
@@ -163,36 +190,46 @@ export default async function handler(req, res) {
 
   try {
     // 2. Client profile + the firm entities that bill this portal.
-    const [{ data: client, error: clientErr }, { data: entities, error: entErr }] = await Promise.all([
-      admin
-        .schema('core')
-        .from('clients')
-        .select('id, client_code, client_name, entity_type, email, phone, gstin, pan, billing_address, state_code')
-        .eq('id', clientId)
-        .maybeSingle(),
-      admin
+    const { data: client, error: clientErr } = await admin
+      .schema('core')
+      .from('clients')
+      .select('id, client_code, client_name, entity_type, email, phone, gstin, pan, billing_address, state_code')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    if (clientErr) throw clientErr;
+    if (!client) return res.status(404).json({ error: 'Client record not found.' });
+
+    let entities = DEFAULT_LEGAL_ENTITIES;
+    try {
+      const { data: entData, error: entErr } = await admin
         .schema('core')
         .from('legal_entities')
         .select('code, display_name, practice_areas, sort_order, gstin, bank_account_name, bank_name, bank_account_no, bank_ifsc, bank_branch')
         .eq('active', true)
-        .order('sort_order'),
-    ]);
-    if (clientErr) throw clientErr;
-    if (entErr) throw entErr;
-    if (!client) return res.status(404).json({ error: 'Client record not found.' });
+        .order('sort_order');
+      if (!entErr && Array.isArray(entData) && entData.length > 0) {
+        entities = entData;
+      }
+    } catch (e) {
+      console.warn('legal_entities fetch fallback to defaults:', e);
+    }
 
-    // 3. Matters. billing_entity is a DB column (set by trigger from department_entity_map),
-    //    so the UI groups on data, not on a hardcoded department list.
+    // 3. Matters. Dynamically assign billing_entity based on matter department
+    // (LITIGATION -> PBA, else -> LEXTRIA_RESEARCH) with graceful fallback.
     const { data: projectCodes, error: pcErr } = await admin
       .schema('core')
       .from('project_codes')
-      .select('id, code, prefix, department, billing_entity, client_id, title, status, owning_app, created_at')
+      .select('id, code, prefix, department, client_id, title, status, owning_app, created_at')
       .eq('client_id', clientId)
       .neq('status', 'DUPLICATE_REVIEW')
       .order('created_at', { ascending: false });
     if (pcErr) throw pcErr;
 
-    const matters = projectCodes || [];
+    const matters = (projectCodes || []).map((m) => ({
+      ...m,
+      billing_entity: m.billing_entity || (m.department === 'LITIGATION' ? 'PBA' : 'LEXTRIA_RESEARCH')
+    }));
     const matterIds = matters.map((m) => m.id);
     const empty = Promise.resolve({ data: [], error: null });
 
