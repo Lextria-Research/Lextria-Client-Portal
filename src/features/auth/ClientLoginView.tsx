@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Orbit,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 
@@ -70,7 +71,7 @@ export const ClientLoginView: React.FC = () => {
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-2xl shadow-blue-500/40 border border-blue-400/30">
-            <Lock className="w-7 h-7 text-white" />
+            <Orbit className="w-7 h-7 text-white" />
           </div>
         </div>
         <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-md">
