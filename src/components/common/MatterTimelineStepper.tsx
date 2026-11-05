@@ -6,10 +6,13 @@ import { PROSECUTION_STAGES } from '../../lib/api';
 interface StepperProps {
   department: string;
   stageIndex: number;
+  stages?: string[];
 }
 
-export const MatterTimelineStepper: React.FC<StepperProps> = ({ department, stageIndex }) => {
-  const stages = PROSECUTION_STAGES[department] || PROSECUTION_STAGES['IP_PATENT'];
+export const MatterTimelineStepper: React.FC<StepperProps> = ({ department, stageIndex, stages: propStages }) => {
+  const stages = propStages && propStages.length > 0
+    ? propStages
+    : (PROSECUTION_STAGES[department] || PROSECUTION_STAGES['IP_PATENT']);
 
   return (
     <div className="w-full">

@@ -128,7 +128,16 @@ export async function fetchClientDocuments(matterIds: string[]): Promise<ClientD
 /** Stage labels for the lifecycle stepper. Progress itself is computed server-side. */
 export const PROSECUTION_STAGES: Record<string, string[]> = {
   IP_PATENT: [
+    'IDF & Intake',
     'Provisional Filed',
+    'Complete Specification Filed',
+    'Request for Examination',
+    'FER Response Submitted',
+    'Hearing & Written Submissions',
+    'Patent Granted',
+  ],
+  IP_PATENT_CS: [
+    'IDF & Intake',
     'Complete Specification Filed',
     'Request for Examination',
     'FER Response Submitted',

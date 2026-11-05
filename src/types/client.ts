@@ -39,6 +39,7 @@ export interface StageProgress {
   stageIndex: number;
   totalStages: number;
   percentage: number;
+  stages?: string[];
 }
 
 export interface UnifiedMatter {

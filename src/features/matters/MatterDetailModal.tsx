@@ -162,6 +162,7 @@ export const MatterDetailModal: React.FC<ModalProps> = ({ matter, onClose }) => 
             <MatterTimelineStepper
               department={matter.department}
               stageIndex={matter.stage_progress?.stageIndex ?? 0}
+              stages={matter.stage_progress?.stages}
             />
           </div>
 

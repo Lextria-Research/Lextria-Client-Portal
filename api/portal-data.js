@@ -60,8 +60,17 @@ const DEFAULT_LEGAL_ENTITIES = [
 ];
 
 const PROSECUTION_STAGES = {
-  IP_PATENT: [
+  IP_PATENT_PS: [
+    'IDF & Intake',
     'Provisional Filed',
+    'Complete Specification Filed',
+    'Request for Examination',
+    'FER Response Submitted',
+    'Hearing & Written Submissions',
+    'Patent Granted',
+  ],
+  IP_PATENT_CS: [
+    'IDF & Intake',
     'Complete Specification Filed',
     'Request for Examination',
     'FER Response Submitted',
@@ -91,8 +100,14 @@ const PROSECUTION_STAGES = {
   ],
 };
 
-function calculateStageProgress(department, events = [], litCase = null) {
-  const stageList = PROSECUTION_STAGES[department] || PROSECUTION_STAGES.LITIGATION;
+function calculateStageProgress(department, events = [], litCase = null, patentApp = null) {
+  let stageList = PROSECUTION_STAGES[department] || PROSECUTION_STAGES.LITIGATION;
+
+  if (department === 'IP_PATENT') {
+    const isDirectCS = (patentApp?.specification_type || '').toUpperCase() === 'CS';
+    stageList = isDirectCS ? PROSECUTION_STAGES.IP_PATENT_CS : PROSECUTION_STAGES.IP_PATENT_PS;
+  }
+
   const totalStages = stageList.length;
   const pct = (i) => Math.round(((i + 1) / totalStages) * 100);
 
@@ -103,22 +118,34 @@ function calculateStageProgress(department, events = [], litCase = null) {
     else if (/argument|evidence|hearing|trial/.test(cs)) i = 3;
     else if (/pleading|objection|reply|rejoinder|\bws\b/.test(cs)) i = 2;
     else if (/summons|notice|admission/.test(cs)) i = 1;
-    return { currentStage: litCase.current_stage, stageIndex: i, totalStages, percentage: pct(i) };
+    return { currentStage: litCase.current_stage, stageIndex: i, totalStages, percentage: pct(i), stages: stageList };
   }
 
   if (!events.length) {
-    return { currentStage: stageList[0], stageIndex: 0, totalStages, percentage: pct(0) };
+    return { currentStage: stageList[0], stageIndex: 0, totalStages, percentage: pct(0), stages: stageList };
   }
 
   const codes = events.map((e) => String(e.event_code || '').toUpperCase());
   const has = (re) => codes.some((c) => re.test(c));
   let i = 0;
   if (department === 'IP_PATENT') {
-    if (has(/GRANT/)) i = 5;
-    else if (has(/HEARING|_WS_/)) i = 4;
-    else if (has(/FER/)) i = 3;
-    else if (has(/RFE/)) i = 2;
-    else if (has(/CS_FILED/)) i = 1;
+    const isDirectCS = (patentApp?.specification_type || '').toUpperCase() === 'CS';
+    if (isDirectCS) {
+      if (has(/GRANT/)) i = 5;
+      else if (has(/HEARING|_WS_/)) i = 4;
+      else if (has(/FER/)) i = 3;
+      else if (has(/RFE/)) i = 2;
+      else if (has(/CS_FILED/)) i = 1;
+      else i = 0;
+    } else {
+      if (has(/GRANT/)) i = 6;
+      else if (has(/HEARING|_WS_/)) i = 5;
+      else if (has(/FER/)) i = 4;
+      else if (has(/RFE/)) i = 3;
+      else if (has(/CS_FILED/)) i = 2;
+      else if (has(/PS_FILED/)) i = 1;
+      else i = 0;
+    }
   } else if (department === 'IP_SOFT') {
     if (has(/REGISTERED|GRANT/)) i = 4;
     else if (has(/PUBLISHED|JOURNAL/)) i = 3;
@@ -137,7 +164,7 @@ function calculateStageProgress(department, events = [], litCase = null) {
   } else {
     i = Math.min(events.length - 1, totalStages - 1);
   }
-  return { currentStage: stageList[i], stageIndex: i, totalStages, percentage: pct(i) };
+  return { currentStage: stageList[i], stageIndex: i, totalStages, percentage: pct(i), stages: stageList };
 }
 
 function applyCors(req, res) {
@@ -367,7 +394,7 @@ export default async function handler(req, res) {
         patent_status: pat?.current_status ?? null,
         last_event: matterEvents[0] || null,
         events_count: matterEvents.length,
-        stage_progress: calculateStageProgress(m.department, matterEvents, lc),
+        stage_progress: calculateStageProgress(m.department, matterEvents, lc, pat),
       };
     });
 
