@@ -58,35 +58,43 @@ export const ClientHeader: React.FC = () => {
       {/* Top Banner: Brand and Authenticated Client Identity */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Brand Logo & Name */}
+          {/* Brand Logo & Name (Personalized to authenticated Client) */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-black text-white text-base shadow-md shadow-blue-500/20">
-              L
-            </div>
+            {activeClient?.logo_url ? (
+              <img
+                src={activeClient.logo_url}
+                alt={activeClient.client_name}
+                className="h-10 max-h-10 max-w-[160px] object-contain rounded-xl bg-white/10 p-1 border border-white/15 shadow-md shadow-blue-500/10 shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-white text-base shadow-md shadow-blue-500/20 shrink-0">
+                {(activeClient?.client_name || activeClient?.client_code || 'CL').slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white">
-                  LEXTRIA
+                <span className="font-extrabold text-base tracking-tight text-white truncate max-w-[240px] sm:max-w-[420px]" title={activeClient?.client_name || 'Client Portal'}>
+                  {activeClient?.client_name || 'Client Portal'}
                 </span>
-                <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
                   Client Portal
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 hidden sm:block">
-                Unified Legal &amp; Intellectual Property Hub
+                Unified Legal &amp; Intellectual Property Hub • Managed via Lextria
               </p>
             </div>
           </div>
 
           {/* Authenticated Client Account Badge (Locked to authenticated client) */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80">
-              <div className="w-8 h-8 rounded-lg bg-blue-600/30 border border-blue-500/40 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
-                <Building2 className="w-4 h-4" />
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80">
+              <div className="w-7 h-7 rounded-lg bg-blue-600/30 border border-blue-500/40 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                <Building2 className="w-3.5 h-3.5" />
               </div>
-              <div className="max-w-[200px] sm:max-w-[320px] truncate text-left">
-                <div className="text-xs font-bold text-slate-100 truncate">
-                  {activeClient?.client_name || authUser?.email || 'Client Portfolio'}
+              <div className="max-w-[140px] sm:max-w-[200px] truncate text-left">
+                <div className="text-xs font-bold text-slate-200 truncate">
+                  {authUser?.email || activeClient?.email || activeClient?.client_code || 'Client Account'}
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
                   <span className="font-bold text-blue-400">

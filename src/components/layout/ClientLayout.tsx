@@ -21,10 +21,10 @@ export const ClientLayout: React.FC = () => {
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span className="font-semibold text-slate-700 dark:text-slate-300">
-              Lextria Legal &amp; Intellectual Property Practice
+              {activeClient?.client_name ? `${activeClient.client_name} Legal Portfolio` : 'Client Legal Portfolio'}
             </span>
             <span>•</span>
-            <span>End-to-End Client Confidentiality &amp; Privilege Maintained</span>
+            <span>Confidential Client Registry • Managed via Lextria Practice</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="font-mono text-[11px]">

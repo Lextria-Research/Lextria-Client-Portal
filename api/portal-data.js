@@ -227,6 +227,25 @@ export default async function handler(req, res) {
     if (clientErr) throw clientErr;
     if (!client) return res.status(404).json({ error: 'Client record not found.' });
 
+    // Fetch client logo from core.app_settings or auth metadata
+    let logoUrl = userMeta.logo_url || null;
+    try {
+      const { data: logoSetting } = await admin
+        .schema('core')
+        .from('app_settings')
+        .select('value')
+        .eq('app', 'CORE')
+        .eq('key', `client_logo_${clientId}`)
+        .maybeSingle();
+
+      if (logoSetting?.value) {
+        logoUrl = typeof logoSetting.value === 'string' ? logoSetting.value : (logoSetting.value.logo_url || logoUrl);
+      }
+    } catch (logoErr) {
+      console.warn('portal-data: could not fetch client logo:', logoErr);
+    }
+    client.logo_url = logoUrl;
+
     let entities = DEFAULT_LEGAL_ENTITIES;
     try {
       const { data: entData, error: entErr } = await admin

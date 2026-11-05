@@ -100,17 +100,26 @@ export const ClientDashboardView: React.FC = () => {
       {/* Welcome & Client Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Official Client Portfolio</span>
+          <div className="flex items-center gap-5">
+            {activeClient?.logo_url && (
+              <img
+                src={activeClient.logo_url}
+                alt={activeClient.client_name}
+                className="h-16 max-h-16 max-w-[180px] object-contain rounded-2xl bg-white/10 p-2 border border-white/20 shadow-lg backdrop-blur-sm shrink-0"
+              />
+            )}
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Official Client Portfolio</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                {activeClient?.client_name || 'Client Overview'}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+                Your matters, grouped by the firm that handles and bills them.
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              {activeClient?.client_name || 'Client Overview'}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Your matters, grouped by the firm that handles and bills them.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

@@ -222,7 +222,7 @@ export const MatterDetailModal: React.FC<ModalProps> = ({ matter, onClose }) => 
         {/* Footer */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between">
           <div className="text-xs text-slate-400">
-            Official Lextria Client Registry Record
+            Official Client Registry Record • Verified by Lextria
           </div>
           <button
             onClick={onClose}

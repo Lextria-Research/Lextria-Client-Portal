@@ -60,14 +60,14 @@ export const ClientLoginView: React.FC = () => {
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-blue-500/30 border border-blue-400/20">
-            L
+            <Lock className="w-7 h-7 text-white" />
           </div>
         </div>
         <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-          Lextria Client Portal
+          Client Portal
         </h2>
         <p className="mt-2 text-center text-xs sm:text-sm text-slate-400">
-          Secure, Isolated Access for Firm Clients &amp; Corporates
+          Secure, Dedicated Portfolio Access for Corporate Clients &amp; Counsel
         </p>
       </div>
 

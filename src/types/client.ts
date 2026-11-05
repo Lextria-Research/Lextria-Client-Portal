@@ -32,6 +32,7 @@ export interface ClientProfile {
   pan: string | null;
   billing_address: string | null;
   state_code: string | null;
+  logo_url?: string | null;
 }
 
 export interface StageProgress {
