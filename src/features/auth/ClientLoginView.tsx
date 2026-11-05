@@ -50,41 +50,42 @@ export const ClientLoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 selection:bg-blue-600 selection:text-white relative overflow-hidden">
-      {/* Ambient Video Background with Cinematic Overlay */}
+    <div className="min-h-screen text-slate-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 selection:bg-blue-600 selection:text-white relative overflow-hidden">
+      {/* Ambient Video Background with Subtle Vignette (Animation fully visible) */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <video
           autoPlay
           loop
           muted
           playsInline
-          className="w-full h-full object-cover scale-105"
+          className="w-full h-full object-cover"
         >
           <source src="/background.mp4" type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80" />
+        {/* Transparent center so ocean water waves are vibrant and visible */}
+        <div className="absolute inset-0 bg-slate-950/25" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/45 via-transparent to-slate-950/55" />
       </div>
 
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-blue-500/30 border border-blue-400/20">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-2xl shadow-blue-500/40 border border-blue-400/30">
             <Lock className="w-7 h-7 text-white" />
           </div>
         </div>
-        <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+        <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-md">
           Counsel Nexus
         </h2>
-        <p className="mt-1 text-center text-xs sm:text-sm font-semibold tracking-wider text-blue-400 uppercase">
+        <p className="mt-1 text-center text-xs sm:text-sm font-semibold tracking-wider text-blue-300 uppercase drop-shadow-sm">
           Unified IP &amp; Legal Console
         </p>
-        <p className="mt-1 text-center text-xs text-slate-400">
+        <p className="mt-1 text-center text-xs text-slate-200 drop-shadow-sm">
           Secure, Dedicated Portfolio Access for In-House Counsel &amp; Corporate Entities
         </p>
       </div>
 
       <div className="mt-8 relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-slate-900/90 backdrop-blur-xl py-8 px-5 sm:px-10 shadow-2xl rounded-2xl border border-slate-800">
+        <div className="bg-slate-900/85 backdrop-blur-xl py-8 px-5 sm:px-10 shadow-2xl rounded-2xl border border-slate-700/70">
           {error && (
             <div className="mb-5 p-3.5 bg-red-950/60 border border-red-800 rounded-xl flex items-center gap-2.5 text-xs text-red-300">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
