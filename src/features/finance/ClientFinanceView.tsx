@@ -12,68 +12,62 @@ import {
   Download,
   CheckCircle2,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
-import {
-  fetchClientMatters,
-  fetchClientBillingStages,
-  fetchClientRecoverableCosts,
-  formatINR,
-  formatDate,
-} from '../../lib/api';
-import { BillingStageItem, RecoverableCostItem, UnifiedMatter } from '../../types/client';
+import { fetchPortalData, PortalDataBundle, entityTabs, entityKey, formatINR, formatDate } from '../../lib/api';
+
+// Billable statuses of finance.billing_stages.billing_status
+const BILLED = new Set(['UNBILLED_WORK_DONE', 'INVOICED', 'PAID']);
 
 export const ClientFinanceView: React.FC = () => {
   const { activeClient } = useAuth();
-  const [matters, setMatters] = useState<UnifiedMatter[]>([]);
-  const [billingStages, setBillingStages] = useState<BillingStageItem[]>([]);
-  const [costs, setCosts] = useState<RecoverableCostItem[]>([]);
+  const [bundle, setBundle] = useState<PortalDataBundle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'stages' | 'costs' | 'statement'>('stages');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     if (activeClient?.id) {
-      loadFinanceData(activeClient.id);
+      void loadFinanceData();
     }
   }, [activeClient?.id]);
 
-  const loadFinanceData = async (clientId: string) => {
+  const loadFinanceData = async (force = false) => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const mList = await fetchClientMatters(clientId);
-      setMatters(mList);
-      const matterIds = mList.map((m) => m.id);
-
-      const [bList, cList] = await Promise.all([
-        fetchClientBillingStages(matterIds),
-        fetchClientRecoverableCosts(matterIds),
-      ]);
-      setBillingStages(bList);
-      setCosts(cList);
+      setBundle(await fetchPortalData(force));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load the ledger.');
     } finally {
       setLoading(false);
     }
   };
 
-  const matterCodeMap = Object.fromEntries(matters.map((m) => [m.id, m.code]));
-
-  // Financial Computations
-  const totalCompletedMilestones = billingStages
-    .filter((s) => s.status === 'TRIGGERED' || s.status === 'INVOICED' || s.status === 'COLLECTED')
-    .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-  const totalGovtDisbursements = costs.reduce((sum, c) => sum + (c.amount || 0), 0);
-
-  // Demo client advance retainer balances
-  const retainerBalances: Record<string, number> = {
-    'c0736c22-db5e-4bd1-b7f5-5facc08d865e': 450000, // MAHE
-    '67008f3c-a990-4d96-9a88-7d04a76d97bc': 180000, // PRS Neurosciences
-    '5a38d4f3-ef64-45c8-87d0-7f46ceb27421': 120000, // CodeZyng
-    '85be8aa2-26d5-4a37-8563-5857476706e5': 95000,  // Lightspeed Photonics
-    '9b2928b5-eca0-48ec-ba99-fb141419b2a6': 60000,  // Circlechess
+  // Each firm entity has its own ledger, GSTIN and bank account. Never mix them.
+  const matters = bundle?.matters ?? [];
+  const ledgerTabs = entityTabs(bundle?.entities ?? [], matters);
+  const requested = searchParams.get('entity');
+  const activeEntityKey = ledgerTabs.some((t) => t.key === requested) ? requested! : ledgerTabs[0]?.key ?? null;
+  const activeEntity = ledgerTabs.find((t) => t.key === activeEntityKey)?.entity ?? null;
+  const selectEntity = (key: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('entity', key);
+    setSearchParams(next, { replace: true });
   };
 
-  const advanceRetainer = activeClient?.id ? retainerBalances[activeClient.id] || 100000 : 100000;
-  const netDueBalance = Math.max(0, totalCompletedMilestones + totalGovtDisbursements - advanceRetainer);
+  const billingStages = (bundle?.billingStages ?? []).filter((s) => entityKey(s.billing_entity) === activeEntityKey);
+  const costs = (bundle?.recoverableCosts ?? []).filter((c) => entityKey(c.billing_entity) === activeEntityKey);
+  const matterCodeMap = Object.fromEntries(matters.map((m) => [m.id, m.code]));
+
+  const totalCompletedMilestones = billingStages
+    .filter((s) => BILLED.has(s.status))
+    .reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const totalGovtDisbursements = costs.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+  // Advances/retainers live in finance.advances and are not exposed to the portal yet.
+  // The previous hardcoded per-client retainer figures were demo values and have been removed.
+  const netDueBalance = totalCompletedMilestones + totalGovtDisbursements;
 
   return (
     <div className="space-y-8">
@@ -89,7 +83,7 @@ export const ClientFinanceView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => activeClient?.id && loadFinanceData(activeClient.id)}
+          onClick={() => void loadFinanceData(true)}
           disabled={loading}
           className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
         >
@@ -98,18 +92,43 @@ export const ClientFinanceView: React.FC = () => {
         </button>
       </div>
 
+      {loadError && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-800 dark:text-red-300 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {loadError}
+        </div>
+      )}
+
+      {/* One ledger per billing entity */}
+      <div role="tablist" aria-label="Billing entity" className="flex flex-wrap gap-2">
+        {ledgerTabs.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={t.key === activeEntityKey}
+            onClick={() => selectEntity(t.key)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+              t.key === activeEntityKey
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-400'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Retainer Funds Card */}
+        {/* Billing entity card */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Retainer Funds</span>
-            <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Billed By</span>
+            <Building className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-            {formatINR(advanceRetainer)}
+          <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+            {activeEntity?.display_name ?? 'Unassigned'}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Available advance deposit</p>
+          <p className="text-[11px] text-slate-400 mt-1 font-mono">{activeEntity?.gstin ? `GSTIN ${activeEntity.gstin}` : '—'}</p>
         </div>
 
         {/* Completed Milestones Card */}
@@ -139,13 +158,13 @@ export const ClientFinanceView: React.FC = () => {
         {/* Net Settlement Balance Card */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Net Payable</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Billable</span>
             <CreditCard className="w-4 h-4 text-slate-700 dark:text-slate-300" />
           </div>
           <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
             {formatINR(netDueBalance)}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Adjusted against retainer balance</p>
+          <p className="text-[11px] text-slate-400 mt-1">Fees + costs, before advances and payments</p>
         </div>
       </div>
 
@@ -222,16 +241,16 @@ export const ClientFinanceView: React.FC = () => {
                       <td className="p-3.5 pr-5 text-right">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            stage.status === 'COLLECTED'
+                            stage.status === 'PAID'
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                               : stage.status === 'INVOICED'
                               ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                              : stage.status === 'TRIGGERED'
+                              : stage.status === 'UNBILLED_WORK_DONE'
                               ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                               : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                           }`}
                         >
-                          {stage.status}
+                          {stage.status === 'UNBILLED_WORK_DONE' ? 'WORK DONE' : stage.status}
                         </span>
                       </td>
                     </tr>
@@ -301,30 +320,26 @@ export const ClientFinanceView: React.FC = () => {
           <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Building className="w-4 h-4 text-blue-600" />
-              <span>Lextria Client Remittance Account</span>
+              <span>Remittance Account: {activeEntity?.display_name ?? '—'}</span>
             </h3>
-            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300 font-mono">
-              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-400">Account Name:</span>
-                <span className="font-bold">LEXTRIA RESEARCH &amp; LEGAL LLP</span>
+            {activeEntity?.bank_account_no ? (
+              <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300 font-mono">
+                {([
+                  ['Account Name', activeEntity.bank_account_name],
+                  ['Bank', activeEntity.bank_name],
+                  ['Account No', activeEntity.bank_account_no],
+                  ['IFSC Code', activeEntity.bank_ifsc],
+                  ['Branch', activeEntity.bank_branch],
+                ] as const).map(([label, value]) => (
+                  <div key={label} className="flex justify-between py-1 border-b last:border-b-0 border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-400">{label}:</span>
+                    <span className="font-bold">{value || '—'}</span>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-400">Bank:</span>
-                <span>HDFC Bank Limited</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-400">Account No:</span>
-                <span className="font-bold">50200088991122</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-400">IFSC Code:</span>
-                <span className="font-bold">HDFC0000053</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">Branch:</span>
-                <span>Indiranagar, Bengaluru</span>
-              </div>
-            </div>
+            ) : (
+              <p className="text-xs text-slate-500">Bank details for this firm will be shared on your invoice.</p>
+            )}
           </div>
 
           <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
@@ -343,7 +358,7 @@ export const ClientFinanceView: React.FC = () => {
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-400">Firm GSTIN:</span>
-                <span className="font-bold">29AAFFL1234F1Z8</span>
+                <span className="font-bold">{activeEntity?.gstin || '—'}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-400">Invoicing Cycle:</span>

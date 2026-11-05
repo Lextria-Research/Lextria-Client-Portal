@@ -13,48 +13,84 @@ import {
   RefreshCw,
   ExternalLink,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
-import { fetchClientMatters, formatDate } from '../../lib/api';
-import { UnifiedMatter, DepartmentType } from '../../types/client';
+import { fetchPortalData, entityTabs, entityKey, formatDate, getDepartmentLabel } from '../../lib/api';
+import { UnifiedMatter, LegalEntity } from '../../types/client';
 import { DepartmentBadge, MatterStatusBadge } from '../../components/common/StatusBadge';
 import { MatterDetailModal } from './MatterDetailModal';
+
+const DEPARTMENT_ICONS: Record<string, React.FC<{ className?: string }>> = {
+  IP_PATENT: Award,
+  IP_SOFT: Layers,
+  LITIGATION: Scale,
+  AGREEMENT: FileCheck,
+};
 
 export const ClientMattersView: React.FC = () => {
   const { activeClient } = useAuth();
   const [matters, setMatters] = useState<UnifiedMatter[]>([]);
+  const [entities, setEntities] = useState<LegalEntity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<DepartmentType>('ALL');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [deptFilter, setDeptFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedMatter, setSelectedMatter] = useState<UnifiedMatter | null>(null);
 
   useEffect(() => {
     if (activeClient?.id) {
-      loadMatters(activeClient.id);
+      void loadMatters();
     }
   }, [activeClient?.id]);
 
-  const loadMatters = async (clientId: string) => {
+  const loadMatters = async (force = false) => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const data = await fetchClientMatters(clientId);
-      setMatters(data);
+      const bundle = await fetchPortalData(force);
+      setMatters(bundle.matters);
+      setEntities(bundle.entities);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load matters.');
     } finally {
       setLoading(false);
     }
   };
 
-  const tabs: { id: DepartmentType; label: string; icon: React.FC<{ className?: string }> }[] = [
-    { id: 'ALL', label: 'All Matters', icon: Briefcase },
-    { id: 'IP_PATENT', label: 'Patents', icon: Award },
-    { id: 'IP_SOFT', label: 'Trademarks / Soft IP', icon: Layers },
-    { id: 'LITIGATION', label: 'Litigation & Disputes', icon: Scale },
-    { id: 'AGREEMENT', label: 'Commercial Agreements', icon: FileCheck },
-  ];
+  // Level 1: firm entity (from DB). Level 2: departments present inside that entity.
+  const entityTabList = useMemo(() => entityTabs(entities, matters), [entities, matters]);
+  const requestedEntity = searchParams.get('entity');
+  const activeEntity = entityTabList.some((t) => t.key === requestedEntity)
+    ? requestedEntity!
+    : entityTabList[0]?.key ?? null;
+
+  const selectEntity = (key: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('entity', key);
+    setSearchParams(next, { replace: true });
+    setDeptFilter('ALL');
+  };
+
+  const entityMatters = useMemo(
+    () => matters.filter((m) => entityKey(m.billing_entity) === activeEntity),
+    [matters, activeEntity]
+  );
+
+  const tabs = useMemo(() => {
+    const depts = [...new Set(entityMatters.map((m) => m.department))];
+    return [
+      { id: 'ALL', label: 'All', icon: Briefcase },
+      ...depts.map((d) => ({ id: d, label: getDepartmentLabel(d), icon: DEPARTMENT_ICONS[d] ?? Briefcase })),
+    ];
+  }, [entityMatters]);
+  const activeTab = tabs.some((t) => t.id === deptFilter) ? deptFilter : 'ALL';
+  const setActiveTab = setDeptFilter;
 
   const filteredMatters = useMemo(() => {
-    return matters.filter((m) => {
-      // Department tab filter
+    return entityMatters.filter((m) => {
+      // Department sub-filter (within the selected entity)
       if (activeTab !== 'ALL' && m.department !== activeTab) return false;
 
       // Status filter
@@ -75,7 +111,7 @@ export const ClientMattersView: React.FC = () => {
 
       return true;
     });
-  }, [matters, activeTab, statusFilter, searchQuery]);
+  }, [entityMatters, activeTab, statusFilter, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -91,7 +127,7 @@ export const ClientMattersView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => activeClient?.id && loadMatters(activeClient.id)}
+          onClick={() => void loadMatters(true)}
           disabled={loading}
           className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
         >
@@ -100,15 +136,45 @@ export const ClientMattersView: React.FC = () => {
         </button>
       </div>
 
-      {/* Tabs */}
+      {loadError && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-800 dark:text-red-300">
+          {loadError}
+        </div>
+      )}
+
+      {/* Entity tabs (Lextria Research / Pranav Bhat & Associates, from core.legal_entities) */}
+      <div role="tablist" aria-label="Firm" className="flex flex-wrap gap-2">
+        {entityTabList.map((t) => {
+          const selected = t.key === activeEntity;
+          const count = matters.filter((m) => entityKey(m.billing_entity) === t.key).length;
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => selectEntity(t.key)}
+              title={t.subtitle}
+              className={`px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                selected
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-400'
+              }`}
+            >
+              {t.label} <span className="opacity-70">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Department sub-tabs within the selected entity */}
       <div className="border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
         <div className="flex space-x-2 sm:space-x-4 pb-px">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const count =
               tab.id === 'ALL'
-                ? matters.length
-                : matters.filter((m) => m.department === tab.id).length;
+                ? entityMatters.length
+                : entityMatters.filter((m) => m.department === tab.id).length;
             const isActive = activeTab === tab.id;
 
             return (
@@ -249,7 +315,7 @@ export const ClientMattersView: React.FC = () => {
         )}
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>Showing {filteredMatters.length} of {matters.length} matters</span>
+          <span>Showing {filteredMatters.length} of {entityMatters.length} matters</span>
           <span>Click any matter row for full prosecution milestones &amp; case details</span>
         </div>
       </div>

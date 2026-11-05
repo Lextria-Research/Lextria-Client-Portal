@@ -1,233 +1,99 @@
 // src/lib/auth.tsx
-// Manages Client Portal Authentication and Active Client Session context
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// Client Portal authentication.
+//
+// The active client is whatever /api/portal-data returns for the verified session.
+// It is never derived in the browser from user_metadata (user-editable), from seeded
+// constants, or from localStorage, so a user cannot point the portal at another client.
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { fetchPortalData, clearPortalCache, PortalApiError } from './api';
 import { ClientProfile } from '../types/client';
-
-export interface ClientAccountDemo {
-  client_id: string;
-  client_code: string;
-  client_name: string;
-  email: string;
-  defaultPassword?: string;
-}
-
-export const SEEDED_CLIENT_LOGINS: ClientAccountDemo[] = [
-  {
-    client_id: 'c0736c22-db5e-4bd1-b7f5-5facc08d865e',
-    client_code: 'MAHE',
-    client_name: 'Manipal Academy of Higher Education (MAHE)',
-    email: 'mahe@client.lextria.in',
-    defaultPassword: 'LextriaPortal!MAHE2026',
-  },
-  {
-    client_id: '67008f3c-a990-4d96-9a88-7d04a76d97bc',
-    client_code: 'PRS',
-    client_name: 'PRS Neurosciences and Mechatronics Research Institute',
-    email: 'prs@client.lextria.in',
-    defaultPassword: 'LextriaPortal!PRS2026',
-  },
-  {
-    client_id: '5a38d4f3-ef64-45c8-87d0-7f46ceb27421',
-    client_code: 'CODEZ',
-    client_name: 'CodeZyng Private Limited',
-    email: 'codezyng@client.lextria.in',
-    defaultPassword: 'LextriaPortal!CODEZ2026',
-  },
-  {
-    client_id: '85be8aa2-26d5-4a37-8563-5857476706e5',
-    client_code: 'LPLIG',
-    client_name: 'Lightspeed Photonics Private Limited',
-    email: 'lightspeed@client.lextria.in',
-    defaultPassword: 'LextriaPortal!LPLIG2026',
-  },
-  {
-    client_id: '9b2928b5-eca0-48ec-ba99-fb141419b2a6',
-    client_code: 'CIRCL',
-    client_name: 'Circlechess India Private Limited',
-    email: 'circlechess@client.lextria.in',
-    defaultPassword: 'LextriaPortal!CIRCL2026',
-  },
-];
 
 interface AuthContextType {
   activeClient: ClientProfile | null;
-  authUser: any | null;
+  authUser: User | null;
   loading: boolean;
+  authError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
-const LOCAL_STORAGE_CLIENT_KEY = 'lextria_client_portal_active_client';
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Remove the profile cache written by earlier builds.
+try {
+  localStorage.removeItem('lextria_client_portal_active_client');
+} catch {
+  /* storage unavailable */
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeClient, setActiveClient] = useState<ClientProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_CLIENT_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const [authUser, setAuthUser] = useState<any | null>(null);
+  const [activeClient, setActiveClient] = useState<ClientProfile | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const loadClientByUserId = async (user: any) => {
+  const resolveClient = useCallback(async (user: User | null) => {
+    clearPortalCache();
+    setAuthUser(user);
+    if (!user) {
+      setActiveClient(null);
+      return;
+    }
     try {
-      const meta = user.user_metadata || {};
-      const cid = meta.client_id;
-      let resolvedClient: ClientProfile | null = null;
-
-      // 1. Try querying core.clients from DB
-      if (cid) {
-        try {
-          const { data, error } = await supabase
-            .schema('core')
-            .from('clients')
-            .select('*')
-            .eq('id', cid)
-            .maybeSingle();
-
-          if (data && !error) {
-            resolvedClient = data;
-          }
-        } catch (e) {
-          console.warn('Direct core.clients lookup warning:', e);
-        }
-      }
-
-      // 2. Try querying core.clients by email
-      if (!resolvedClient && user.email) {
-        try {
-          const { data: byEmail } = await supabase
-            .schema('core')
-            .from('clients')
-            .select('*')
-            .ilike('email', user.email)
-            .maybeSingle();
-
-          if (byEmail) {
-            resolvedClient = byEmail;
-          }
-        } catch (e) {
-          console.warn('Email core.clients lookup warning:', e);
-        }
-      }
-
-      // 3. Robust Metadata Resolution (Guarantees client portal access for any created/edited client)
-      if (!resolvedClient && cid) {
-        resolvedClient = {
-          id: cid,
-          client_code: meta.client_code || 'CLIENT',
-          client_name: meta.client_name || user.email?.split('@')[0] || 'Client Portfolio',
-          entity_type: meta.entity_type || 'COMPANY',
-          email: user.email || meta.email || '',
-          phone: meta.phone || null,
-          gstin: meta.gstin || null,
-          pan: meta.pan || null,
-          billing_address: meta.billing_address || null,
-          state_code: meta.state_code || null,
-        };
-      }
-
-      // 4. Fallback: match seeded accounts by email
-      if (!resolvedClient && user.email) {
-        const seeded = SEEDED_CLIENT_LOGINS.find(
-          (s) => s.email.toLowerCase() === user.email.toLowerCase()
-        );
-        if (seeded) {
-          resolvedClient = {
-            id: seeded.client_id,
-            client_code: seeded.client_code,
-            client_name: seeded.client_name,
-            entity_type: 'COMPANY',
-            email: seeded.email,
-            phone: null,
-            gstin: null,
-            pan: null,
-            billing_address: null,
-            state_code: null,
-          };
-        }
-      }
-
-      if (resolvedClient) {
-        setActiveClient(resolvedClient);
-        localStorage.setItem(LOCAL_STORAGE_CLIENT_KEY, JSON.stringify(resolvedClient));
-      }
+      const bundle = await fetchPortalData(true);
+      setActiveClient(bundle.client);
+      setAuthError(null);
     } catch (err) {
-      console.warn('Failed to load client profile:', err);
-      if (user.user_metadata?.client_id) {
-        const fallbackClient: ClientProfile = {
-          id: user.user_metadata.client_id,
-          client_code: user.user_metadata.client_code || 'CLIENT',
-          client_name: user.user_metadata.client_name || user.email || 'Client Portfolio',
-          entity_type: user.user_metadata.entity_type || 'COMPANY',
-          email: user.email || '',
-          phone: null,
-          gstin: null,
-          pan: null,
-          billing_address: null,
-          state_code: null,
-        };
-        setActiveClient(fallbackClient);
-        localStorage.setItem(LOCAL_STORAGE_CLIENT_KEY, JSON.stringify(fallbackClient));
+      setActiveClient(null);
+      const msg = err instanceof Error ? err.message : 'Could not load your client profile.';
+      setAuthError(msg);
+      // A staff login or an unlinked account must not stay signed in to the portal.
+      if (err instanceof PortalApiError && (err.status === 401 || err.status === 403)) {
+        await supabase.auth.signOut();
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthUser(session?.user ?? null);
-      if (session?.user) {
-        loadClientByUserId(session.user).finally(() => setLoading(false));
-      } else {
-        setActiveClient(null);
-        localStorage.removeItem(LOCAL_STORAGE_CLIENT_KEY);
-        setLoading(false);
+    let cancelled = false;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      await resolveClient(session?.user ?? null);
+      if (!cancelled) setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // TOKEN_REFRESHED does not change who the client is; avoid refetching on every refresh.
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        // Defer: calling Supabase inside this callback can deadlock the auth lock.
+        setTimeout(() => void resolveClient(session?.user ?? null), 0);
       }
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setAuthUser(session?.user ?? null);
-      if (session?.user) {
-        await loadClientByUserId(session.user);
-      } else {
-        setActiveClient(null);
-        localStorage.removeItem(LOCAL_STORAGE_CLIENT_KEY);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [resolveClient]);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
+    setAuthError(null);
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      const cleanPassword = password.trim();
-
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
+        email: email.trim().toLowerCase(),
+        password,
       });
+      if (error) throw new Error(error.message || 'Invalid email or password.');
+      if (!data?.user) throw new Error('No user returned from authentication.');
 
-      if (error) {
-        throw new Error(error.message || 'Invalid email or password.');
-      }
-
-      if (data?.user) {
-        setAuthUser(data.user);
-        await loadClientByUserId(data.user);
-        return;
-      }
-
-      throw new Error('No user returned from authentication.');
+      const bundle = await fetchPortalData(true).catch(async (err) => {
+        await supabase.auth.signOut();
+        throw err;
+      });
+      setAuthUser(data.user);
+      setActiveClient(bundle.client);
     } finally {
       setLoading(false);
     }
@@ -235,21 +101,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    clearPortalCache();
     setActiveClient(null);
     setAuthUser(null);
-    localStorage.removeItem(LOCAL_STORAGE_CLIENT_KEY);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        activeClient,
-        authUser,
-        loading,
-        signIn,
-        signOut,
-      }}
-    >
+    <AuthContext.Provider value={{ activeClient, authUser, loading, authError, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
