@@ -99,6 +99,12 @@ export const MatterDetailModal: React.FC<ModalProps> = ({ matter, onClose }) => 
                   <p className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5">{matter.case_number || 'Pending'}</p>
                   {matter.cnr_number && <p className="font-mono text-[11px] text-slate-500">CNR: {matter.cnr_number}</p>}
                 </div>
+                {matter.filing_date && (
+                  <div>
+                    <span className="text-slate-400">Date of Filing:</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{formatDate(matter.filing_date)}</p>
+                  </div>
+                )}
                 {matter.next_hearing_date && (
                   <div className="sm:col-span-2 pt-2 border-t border-amber-500/10 flex flex-wrap items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-semibold">

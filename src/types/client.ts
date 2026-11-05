@@ -62,6 +62,7 @@ export interface UnifiedMatter {
   case_number?: string | null;
   cnr_number?: string | null;
   client_role?: string | null;
+  filing_date?: string | null;
   next_hearing_date?: string | null;
   next_purpose?: string | null;
   current_stage?: string | null;

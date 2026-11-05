@@ -299,7 +299,7 @@ export default async function handler(req, res) {
           ? admin
               .schema('litigator')
               .from('cases')
-              .select('project_code_id, court, bench, case_number, cnr_number, case_type, client_role, current_stage, next_hearing_date, next_purpose')
+              .select('project_code_id, court, bench, case_number, cnr_number, case_type, client_role, current_stage, next_hearing_date, next_purpose, filing_date')
               .in('project_code_id', matterIds)
           : empty
       ),
@@ -367,11 +367,52 @@ export default async function handler(req, res) {
     const litByMatter = new Map(litCases.map((lc) => [lc.project_code_id, lc]));
     const patentByPcId = new Map((clientPatentApps || []).map((p) => [p.project_code_id, p]));
     const patentByCode = new Map((clientPatentApps || []).map((p) => [p.project_code, p]));
+
+    // Reconcile litigation matter events with official statutory case filing_date from litigator.cases,
+    // strictly avoiding data entry timestamps.
+    const allEvents = [...(events || [])];
     const eventsByMatter = new Map();
-    for (const ev of events) {
+    for (const ev of allEvents) {
       if (!eventsByMatter.has(ev.project_code_id)) eventsByMatter.set(ev.project_code_id, []);
       eventsByMatter.get(ev.project_code_id).push(ev);
     }
+
+    for (const m of matters) {
+      if (m.department === 'LITIGATION') {
+        const lc = litByMatter.get(m.id);
+        if (lc?.filing_date) {
+          const expectedIso = new Date(lc.filing_date).toISOString();
+          const matterEvs = eventsByMatter.get(m.id) || [];
+          const suitFiledEv = matterEvs.find((e) => e.event_code === 'SUIT_FILED');
+          if (suitFiledEv) {
+            suitFiledEv.occurred_at = expectedIso;
+          } else {
+            const syntheticFiledEv = {
+              id: `filing-${m.id}`,
+              project_code_id: m.id,
+              event_code: 'SUIT_FILED',
+              title: `Court case filed: ${m.title}`,
+              detail: `Filed before ${lc.court || 'Court'}${lc.bench ? ` (${lc.bench})` : ''}${lc.case_number ? `. Case No: ${lc.case_number}` : ''}`,
+              occurred_at: expectedIso,
+              source_app: 'LITIGATOR',
+              client_visible: true,
+              client_label: 'Case filed',
+              created_at: expectedIso,
+            };
+            allEvents.push(syntheticFiledEv);
+            if (!eventsByMatter.has(m.id)) eventsByMatter.set(m.id, []);
+            eventsByMatter.get(m.id).push(syntheticFiledEv);
+          }
+        }
+      }
+    }
+
+    // Sort each matter's events and the global event list descending by occurred_at
+    for (const mEvs of eventsByMatter.values()) {
+      mEvs.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+    }
+    allEvents.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+
     const matterById = new Map(matters.map((m) => [m.id, m]));
 
     const enrichedMatters = matters.map((m) => {
@@ -385,6 +426,7 @@ export default async function handler(req, res) {
         case_number: lc?.case_number ?? null,
         cnr_number: lc?.cnr_number ?? null,
         client_role: lc?.client_role ?? null,
+        filing_date: lc?.filing_date ?? null,
         next_hearing_date: lc?.next_hearing_date ?? null,
         next_purpose: lc?.next_purpose ?? null,
         current_stage: lc?.current_stage ?? null,
@@ -407,7 +449,7 @@ export default async function handler(req, res) {
       client,
       entities: entities || [],
       matters: enrichedMatters,
-      events: events.map((ev) => {
+      events: allEvents.map((ev) => {
         const m = matterById.get(ev.project_code_id);
         return { ...withEntity(ev), project_code: m?.code ?? null, matter_title: m?.title ?? null };
       }),
