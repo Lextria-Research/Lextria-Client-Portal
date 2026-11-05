@@ -19,6 +19,10 @@ export const ClientHeader: React.FC = () => {
   const { activeClient, authUser, signOut } = useAuth();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lextria_theme');
+      if (saved) return saved === 'dark';
+    } catch {}
     return (
       document.documentElement.classList.contains('dark') ||
       window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -28,8 +32,10 @@ export const ClientHeader: React.FC = () => {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      try { localStorage.setItem('lextria_theme', 'dark'); } catch {}
     } else {
       document.documentElement.classList.remove('dark');
+      try { localStorage.setItem('lextria_theme', 'light'); } catch {}
     }
   }, [isDark]);
 
@@ -94,13 +100,15 @@ export const ClientHeader: React.FC = () => {
               </div>
             </div>
 
-            {/* Dark mode toggle */}
+            {/* Dark/Light mode toggle */}
             <button
-              onClick={() => setIsDark(!isDark)}
-              title="Toggle theme"
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+              type="button"
+              onClick={() => setIsDark((prev) => !prev)}
+              aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer flex items-center justify-center border border-slate-700/60"
             >
-              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-300" />}
             </button>
 
             {/* Sign Out Button */}
