@@ -16,6 +16,7 @@ import {
   Building2,
   Receipt,
   FileCheck,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import {
@@ -97,49 +98,27 @@ export const ClientDashboardView: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      {/* Welcome & Client Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            {activeClient?.logo_url && (
-              <img
-                src={activeClient.logo_url}
-                alt={activeClient.client_name}
-                className="h-16 max-h-16 max-w-[180px] object-contain rounded-2xl bg-white/10 p-2 border border-white/20 shadow-lg backdrop-blur-sm shrink-0"
-              />
-            )}
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-semibold">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Official Client Portfolio</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                {activeClient?.client_name || 'Client Overview'}
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-                Your matters, grouped by the firm that handles and bills them.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => void loadData(true)}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-medium text-white transition cursor-pointer disabled:opacity-60"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh Portfolio</span>
-            </button>
-            <Link
-              to={activeKey ? `/matters?entity=${encodeURIComponent(activeKey)}` : '/matters'}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 transition cursor-pointer"
-            >
-              <span>Explore All Matters</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+      {/* Overview Header & Refresh Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+            <LayoutDashboard className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <span>Portfolio Overview</span>
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Active matters, statutory deadlines, and progression milestones grouped by handling firm.
+          </p>
         </div>
+
+        <button
+          onClick={() => void loadData(true)}
+          disabled={loading}
+          className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer disabled:opacity-60"
+          title="Refresh portfolio data"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${loading ? 'animate-spin' : ''}`} />
+          <span>{loading ? 'Refreshing...' : 'Refresh Portfolio'}</span>
+        </button>
       </div>
 
       {error && (
