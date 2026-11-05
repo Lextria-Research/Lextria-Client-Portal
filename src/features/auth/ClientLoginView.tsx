@@ -64,10 +64,13 @@ export const ClientLoginView: React.FC = () => {
           </div>
         </div>
         <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-          Client Portal
+          Counsel Nexus
         </h2>
-        <p className="mt-2 text-center text-xs sm:text-sm text-slate-400">
-          Secure, Dedicated Portfolio Access for Corporate Clients &amp; Counsel
+        <p className="mt-1 text-center text-xs sm:text-sm font-semibold tracking-wider text-blue-400 uppercase">
+          Unified IP &amp; Legal Console
+        </p>
+        <p className="mt-1 text-center text-xs text-slate-400">
+          Secure, Dedicated Portfolio Access for In-House Counsel &amp; Corporate Entities
         </p>
       </div>
 
@@ -140,7 +143,7 @@ export const ClientLoginView: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span>Sign In to Your Portfolio</span>
+                  <span>Sign In to Counsel Nexus</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

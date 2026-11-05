@@ -25,16 +25,16 @@ const ProtectedClientRoute: React.FC<{ children: React.ReactNode }> = ({ childre
 
   React.useEffect(() => {
     if (activeClient?.client_name) {
-      document.title = `${activeClient.client_name} | Client Portal`;
+      document.title = `${activeClient.client_name} | Counsel Nexus`;
     } else {
-      document.title = 'Client Portal';
+      document.title = 'Counsel Nexus — Unified IP & Legal Console';
     }
   }, [activeClient?.client_name]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-xs font-mono">
-        Authenticating Client Portal...
+        Authenticating Counsel Nexus...
       </div>
     );
   }

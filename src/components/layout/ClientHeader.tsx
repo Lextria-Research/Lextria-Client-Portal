@@ -73,15 +73,15 @@ export const ClientHeader: React.FC = () => {
             )}
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white truncate max-w-[240px] sm:max-w-[420px]" title={activeClient?.client_name || 'Client Portal'}>
-                  {activeClient?.client_name || 'Client Portal'}
+                <span className="font-extrabold text-base tracking-tight text-white truncate max-w-[240px] sm:max-w-[420px]" title={activeClient?.client_name || 'Counsel Nexus'}>
+                  {activeClient?.client_name || 'Counsel Nexus'}
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
-                  Client Portal
+                  Counsel Nexus
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 hidden sm:block">
-                Unified Legal &amp; Intellectual Property Hub • Managed via Lextria
+                Unified IP &amp; Legal Console
               </p>
             </div>
           </div>
