@@ -100,7 +100,7 @@ const PROSECUTION_STAGES = {
   ],
 };
 
-function calculateStageProgress(department, events = [], litCase = null, patentApp = null) {
+function calculateStageProgress(department, events = [], litCase = null, patentApp = null, softIp = null) {
   let stageList = PROSECUTION_STAGES[department] || PROSECUTION_STAGES.LITIGATION;
 
   if (department === 'IP_PATENT') {
@@ -121,12 +121,39 @@ function calculateStageProgress(department, events = [], litCase = null, patentA
     return { currentStage: litCase.current_stage, stageIndex: i, totalStages, percentage: pct(i), stages: stageList };
   }
 
+  const codes = events.map((e) => String(e.event_code || '').toUpperCase());
+  const has = (re) => codes.some((c) => re.test(c));
+
+  if (department === 'IP_SOFT') {
+    const st = (softIp?.status || '').toLowerCase();
+    let i = 0;
+    let currentStageName = null;
+    if (st.includes('registered') || st.includes('grant') || has(/REGISTERED|GRANT/)) {
+      i = 4;
+      currentStageName = 'Registered';
+    } else if (st.includes('published') || st.includes('journal') || has(/PUBLISHED|JOURNAL/)) {
+      i = 3;
+      currentStageName = 'Journal Publication';
+    } else if (st.includes('opposed') || has(/OPPOS/)) {
+      i = 2;
+      currentStageName = 'Opposition Proceedings';
+    } else if (st.includes('objected') || has(/REPLY|COUNTER|EXAM_REPORT/)) {
+      i = 2;
+      currentStageName = 'Examination Report Answered';
+    } else if (has(/FORMALITY/)) {
+      i = 1;
+      currentStageName = 'Formality Check Passed';
+    } else {
+      i = 0;
+      currentStageName = 'Application Filed';
+    }
+    return { currentStage: currentStageName || stageList[i], stageIndex: i, totalStages, percentage: pct(i), stages: stageList };
+  }
+
   if (!events.length) {
     return { currentStage: stageList[0], stageIndex: 0, totalStages, percentage: pct(0), stages: stageList };
   }
 
-  const codes = events.map((e) => String(e.event_code || '').toUpperCase());
-  const has = (re) => codes.some((c) => re.test(c));
   let i = 0;
   if (department === 'IP_PATENT') {
     const isDirectCS = (patentApp?.specification_type || '').toUpperCase() === 'CS';
@@ -146,11 +173,6 @@ function calculateStageProgress(department, events = [], litCase = null, patentA
       else if (has(/PS_FILED/)) i = 1;
       else i = 0;
     }
-  } else if (department === 'IP_SOFT') {
-    if (has(/REGISTERED|GRANT/)) i = 4;
-    else if (has(/PUBLISHED|JOURNAL/)) i = 3;
-    else if (has(/REPLY|COUNTER/)) i = 2;
-    else if (has(/FORMALITY|EXAM_REPORT/)) i = 1;
   } else if (department === 'LITIGATION') {
     if (has(/JUDGMENT|DECREE|SETTLED/)) i = 4;
     else if (has(/ARGUMENT|EVIDENCE/)) i = 3;
@@ -279,6 +301,42 @@ export default async function handler(req, res) {
       .select('id, project_code_id, project_code, application_number, patent_number, specification_type, current_status, applicant_name, title, created_at')
       .eq('client_id', clientId);
 
+    // Soft query IP Ledger state (trademarks, copyrights, designs) for zero sync lag
+    let clientSoftIpRecords = [];
+    try {
+      const { data: stateRow } = await admin
+        .from('lextria_state')
+        .select('state')
+        .eq('id', 'lextria-state')
+        .maybeSingle();
+
+      if (stateRow?.state?.records && Array.isArray(stateRow.state.records)) {
+        const stateClients = stateRow.state.clients || [];
+        const clientNameClean = (client.client_name || '').trim().toLowerCase();
+        const matchedStateClientIds = new Set();
+        stateClients.forEach((sc) => {
+          if (sc.name && sc.name.trim().toLowerCase() === clientNameClean) {
+            matchedStateClientIds.add(sc.id);
+          }
+        });
+
+        clientSoftIpRecords = stateRow.state.records.filter((r) => {
+          if (matchedStateClientIds.has(r.clientId)) return true;
+          if (r.applicants && Array.isArray(r.applicants)) {
+            return r.applicants.some(
+              (a) => a.name && a.name.trim().toLowerCase() === clientNameClean
+            );
+          }
+          if (r.brand && r.brand.trim().toLowerCase() === clientNameClean) {
+            return true;
+          }
+          return false;
+        });
+      }
+    } catch (softIpErr) {
+      console.warn('portal-data: soft query IP Ledger state warning:', softIpErr);
+    }
+
     const baseMatters = (projectCodes || []).map((m) => ({
       ...m,
       billing_entity: m.billing_entity || (m.department === 'LITIGATION' ? 'PBA' : 'LEXTRIA_RESEARCH')
@@ -303,6 +361,31 @@ export default async function handler(req, res) {
           });
           existingCodes.add(p.project_code);
         }
+      }
+    }
+
+    // Auto-reconcile any trademark / soft IP record linked to client that is pending in core.project_codes
+    const softIpByCode = new Map(clientSoftIpRecords.map((r) => [r.code, r]));
+    for (const r of clientSoftIpRecords) {
+      if (r.code && !existingCodes.has(r.code)) {
+        let status = 'ACTIVE';
+        const s = (r.status || '').toLowerCase();
+        if (s.includes('registered') || s.includes('granted')) status = 'COMPLETED';
+        else if (s.includes('abandon') || s.includes('refused') || s.includes('withdraw')) status = 'ABANDONED';
+
+        baseMatters.push({
+          id: `softip-${r.id || r.code}`,
+          code: r.code,
+          prefix: null,
+          department: 'IP_SOFT',
+          client_id: clientId,
+          title: r.brand ? `${r.brand}${r.cls ? ` (Class ${r.cls})` : ''}` : `Trademark ${r.code}`,
+          status: status,
+          owning_app: 'IP_LEDGER',
+          created_at: r.filingDate ? new Date(r.filingDate).toISOString() : new Date().toISOString(),
+          billing_entity: 'LEXTRIA_RESEARCH',
+        });
+        existingCodes.add(r.code);
       }
     }
 
@@ -426,6 +509,58 @@ export default async function handler(req, res) {
       }
     }
 
+    // Reconcile Soft IP matter events (application filed, trademark forms, opposition, exam replies)
+    for (const r of clientSoftIpRecords) {
+      const matter = baseMatters.find((bm) => bm.code === r.code);
+      if (!matter) continue;
+      const mId = matter.id;
+
+      if (r.filingDate) {
+        try {
+          const filedIso = new Date(r.filingDate).toISOString();
+          const filedEv = {
+            id: `filing-softip-${r.code}`,
+            project_code_id: mId,
+            event_code: 'TM_APPLICATION_FILED',
+            title: `Trademark Application Filed: ${r.brand || r.code}`,
+            detail: `Application No. ${r.appno || '-'}${r.cls ? ` (Class ${r.cls})` : ''} filed at Trademark Registry.`,
+            occurred_at: filedIso,
+            source_app: 'IP_LEDGER',
+            client_visible: true,
+            client_label: 'Application filed',
+            created_at: filedIso,
+          };
+          allEvents.push(filedEv);
+          if (!eventsByMatter.has(mId)) eventsByMatter.set(mId, []);
+          eventsByMatter.get(mId).push(filedEv);
+        } catch (_) {}
+      }
+
+      if (Array.isArray(r.miscFilings)) {
+        for (const mf of r.miscFilings) {
+          try {
+            const occDate = mf.filingDate || mf.timestamp || r.filingDate || new Date().toISOString();
+            const mfIso = new Date(occDate).toISOString();
+            const mfEv = {
+              id: `mf-${mf.id || Math.random().toString(36).slice(2)}`,
+              project_code_id: mId,
+              event_code: (mf.formNumber || 'MISC').toUpperCase().replace(/[^A-Z0-9]/g, '_'),
+              title: mf.purpose || `${mf.formNumber || 'Filing'} Submitted`,
+              detail: `Form ${mf.formNumber || '-'}${mf.cbrNumber ? `. CBR: ${mf.cbrNumber}` : ''}${mf.notes ? `. ${mf.notes}` : ''}`,
+              occurred_at: mfIso,
+              source_app: 'IP_LEDGER',
+              client_visible: true,
+              client_label: mf.purpose || mf.formNumber || 'Filing submitted',
+              created_at: mfIso,
+            };
+            allEvents.push(mfEv);
+            if (!eventsByMatter.has(mId)) eventsByMatter.set(mId, []);
+            eventsByMatter.get(mId).push(mfEv);
+          } catch (_) {}
+        }
+      }
+    }
+
     // Sort each matter's events and the global event list descending by occurred_at
     for (const mEvs of eventsByMatter.values()) {
       mEvs.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
@@ -438,6 +573,7 @@ export default async function handler(req, res) {
       const matterEvents = eventsByMatter.get(m.id) || [];
       const lc = litByMatter.get(m.id) || null;
       const pat = patentByPcId.get(m.id) || patentByCode.get(m.code);
+      const tm = softIpByCode.get(m.code);
       return {
         ...m,
         court: lc?.court ?? null,
@@ -445,17 +581,17 @@ export default async function handler(req, res) {
         case_number: lc?.case_number ?? null,
         cnr_number: lc?.cnr_number ?? null,
         client_role: lc?.client_role ?? null,
-        filing_date: lc?.filing_date ?? null,
+        filing_date: (tm?.filingDate || lc?.filing_date) ?? null,
         next_hearing_date: lc?.next_hearing_date ?? null,
         next_purpose: lc?.next_purpose ?? null,
         current_stage: lc?.current_stage ?? null,
-        application_number: pat?.application_number ?? null,
+        application_number: (tm?.appno || pat?.application_number) ?? null,
         patent_number: pat?.patent_number ?? null,
         specification_type: pat?.specification_type ?? null,
         patent_status: pat?.current_status ?? null,
         last_event: matterEvents[0] || null,
         events_count: matterEvents.length,
-        stage_progress: calculateStageProgress(m.department, matterEvents, lc, pat),
+        stage_progress: calculateStageProgress(m.department, matterEvents, lc, pat, tm),
       };
     });
 
