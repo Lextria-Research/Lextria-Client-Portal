@@ -291,6 +291,7 @@ export default async function handler(req, res) {
       .select('id, code, prefix, department, client_id, title, status, owning_app, created_at')
       .eq('client_id', clientId)
       .neq('status', 'DUPLICATE_REVIEW')
+      .neq('status', 'DELETED')
       .order('created_at', { ascending: false });
     if (pcErr) throw pcErr;
 
@@ -337,10 +338,22 @@ export default async function handler(req, res) {
       console.warn('portal-data: soft query IP Ledger state warning:', softIpErr);
     }
 
-    const baseMatters = (projectCodes || []).map((m) => ({
-      ...m,
-      billing_entity: m.billing_entity || (m.department === 'LITIGATION' ? 'PBA' : 'LEXTRIA_RESEARCH')
-    }));
+    const softIpByCode = new Map(clientSoftIpRecords.map((r) => [r.code, r]));
+
+    const baseMatters = (projectCodes || [])
+      .filter((m) => {
+        if (m.status === 'DELETED') return false;
+        // If an IP_SOFT matter belongs to IP_LEDGER and the client's soft IP portfolio was loaded,
+        // but this code was deleted from the ledger, filter it out
+        if (m.department === 'IP_SOFT' && m.owning_app === 'IP_LEDGER' && clientSoftIpRecords.length > 0) {
+          if (!softIpByCode.has(m.code)) return false;
+        }
+        return true;
+      })
+      .map((m) => ({
+        ...m,
+        billing_entity: m.billing_entity || (m.department === 'LITIGATION' ? 'PBA' : 'LEXTRIA_RESEARCH')
+      }));
 
     // Auto-reconcile any patent application linked to client_id that is pending in core.project_codes
     const existingCodes = new Set(baseMatters.map((m) => m.code));
@@ -365,7 +378,6 @@ export default async function handler(req, res) {
     }
 
     // Auto-reconcile any trademark / soft IP record linked to client that is pending in core.project_codes
-    const softIpByCode = new Map(clientSoftIpRecords.map((r) => [r.code, r]));
     for (const r of clientSoftIpRecords) {
       if (r.code && !existingCodes.has(r.code)) {
         let status = 'ACTIVE';
